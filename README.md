@@ -10,10 +10,10 @@ Coworking spaces running multiple branches often rely on spreadsheets, WhatsApp,
 
 **CoworkingOS** addresses this with a centralized operator platform that combines:
 
-- **CRM** — lead tracking, proposals, and client onboarding workflows  
-- **ERP-style operations** — floor maps, visitors, helpdesk, finance, team chat, and admin  
-- **Multi-location control** — branch switcher, per-branch metrics, and role-based access  
-- **Public-facing CMS** — live preview of marketing site content (hero, pricing, branding)
+- **CRM** - lead tracking, proposals, and client onboarding workflows  
+- **ERP-style operations** - floor maps, visitors, helpdesk, finance, team chat, and admin  
+- **Multi-location control** - branch switcher, per-branch metrics, and role-based access  
+- **Public-facing CMS** - live preview of marketing site content (hero, pricing, branding)
 
 This repository is a **production-ready frontend demo**: all business data lives in client-side state (**Zustand**) with realistic seed data. No backend or API keys are required to run it locally. It is suitable for demos, UX evaluation, and as a foundation for wiring a real API later.
 
@@ -37,10 +37,10 @@ Landing Page  →  Enter Platform  →  App Shell (Sidebar + Header)
                               Zustand store (mock data + actions)
 ```
 
-- **Landing** — marketing site with features, pricing tiers, and CTAs into the app  
-- **App shell** — persistent navigation, branch selector, global search, notifications  
-- **Modules** — code-split with `React.lazy` for faster initial load  
-- **State** — single Zustand store with actions that update KPIs, notifications, and cross-module data (e.g. accepting a proposal creates an invoice and onboarding record)
+- **Landing** - marketing site with features, pricing tiers, and CTAs into the app  
+- **App shell** - persistent navigation, branch selector, global search, notifications  
+- **Modules** - code-split with `React.lazy` for faster initial load  
+- **State** - single Zustand store with actions that update KPIs, notifications, and cross-module data (e.g. accepting a proposal creates an invoice and onboarding record)
 
 ---
 
@@ -92,8 +92,8 @@ Then open **[http://localhost:3000](http://localhost:3000)** again.
 
 Serve the contents of `dist/` with any static host, for example:
 
-- Vercel / Netlify — connect repo, build command `npm run build`, output directory `dist`  
-- nginx — `root` pointing to `dist` with SPA fallback to `index.html`  
+- Vercel / Netlify - connect repo, build command `npm run build`, output directory `dist`  
+- nginx - `root` pointing to `dist` with SPA fallback to `index.html`  
 - AWS S3 + CloudFront, GitHub Pages, etc.
 
 ### 5. Other scripts
@@ -135,10 +135,10 @@ Serve the contents of `dist/` with any static host, for example:
 
 ### CRM & client experience
 
-- **Lead pipeline** — Kanban-style stages: new → contacted → qualified → proposal → negotiation → won / lost  
+- **Lead pipeline** - Kanban-style stages: new → contacted → qualified → proposal → negotiation → won / lost  
 - Search, add lead, promote/demote stage, delete lead  
-- **Client onboarding** — checklist steps with progress %; complete onboarding flow  
-- **Quotations & proposals** — create proposals; accept/decline triggers invoices, lead updates, and new onboarding records  
+- **Client onboarding** - checklist steps with progress %; complete onboarding flow  
+- **Quotations & proposals** - create proposals; accept/decline triggers invoices, lead updates, and new onboarding records  
 
 ### Smart visitor management
 
@@ -150,16 +150,16 @@ Serve the contents of `dist/` with any static host, for example:
 
 ### Helpdesk & operations
 
-- **Service tickets** — create, assign, update status (open / in-progress / resolved)  
+- **Service tickets** - create, assign, update status (open / in-progress / resolved)  
 - Categories: WiFi/Network, Facilities, Cleaning, etc.  
-- **Internal tasks** — operational to-dos with priority and assignee  
+- **Internal tasks** - operational to-dos with priority and assignee  
 
 ### Finance & billing
 
 - Invoice list with status: paid, pending, overdue  
 - Mark invoices paid (updates revenue KPI)  
 - Create new invoices  
-- **Renewals tracker** — renew contract, send renewal reminder  
+- **Renewals tracker** - renew contract, send renewal reminder  
 - **PDF export** of invoice/receipt data (jsPDF)  
 
 ### Team chat
@@ -177,12 +177,12 @@ Serve the contents of `dist/` with any static host, for example:
 
 ### ERP admin & RBAC
 
-- **Employee management** — add staff, update status (active / on-leave)  
-- **Integrations layer** — Kisi, Slack, Stripe, SendGrid-style cards; connect/disconnect, webhook URLs  
-- **Role-based access control** — three roles with different sidebar permissions:  
-  - **Super Admin** — all modules + Settings  
-  - **Community Host** — dashboard, floor map, CRM, visitors, helpdesk, team chat  
-  - **Receptionist** — dashboard, visitors, helpdesk  
+- **Employee management** - add staff, update status (active / on-leave)  
+- **Integrations layer** - Kisi, Slack, Stripe, SendGrid-style cards; connect/disconnect, webhook URLs  
+- **Role-based access control** - three roles with different sidebar permissions:  
+  - **Super Admin** - all modules + Settings  
+  - **Community Host** - dashboard, floor map, CRM, visitors, helpdesk, team chat  
+  - **Receptionist** - dashboard, visitors, helpdesk  
 - Profile popover: edit display name and session role (persisted in `localStorage`)  
 
 ### Settings
@@ -191,10 +191,10 @@ Serve the contents of `dist/` with any static host, for example:
 
 ### Global app features
 
-- **Branch switcher** in header — changes context for floor map, visitors, and dashboard copy  
-- **Global search** — leads, invoices, desks across branches  
-- **Notification center** — read/unread, mark all read, delete, simulate test alerts  
-- **Cross-module automation** — actions in one module update others (e.g. proposal accepted → invoice + onboarding + notifications)  
+- **Branch switcher** in header - changes context for floor map, visitors, and dashboard copy  
+- **Global search** - leads, invoices, desks across branches  
+- **Notification center** - read/unread, mark all read, delete, simulate test alerts  
+- **Cross-module automation** - actions in one module update others (e.g. proposal accepted → invoice + onboarding + notifications)  
 
 ---
 
@@ -218,10 +218,10 @@ Serve the contents of `dist/` with any static host, for example:
 
 ### Build & quality
 
-- **@vitejs/plugin-react** — Fast Refresh for React  
-- **@tailwindcss/vite** — Tailwind v4 Vite integration  
-- **ESM** — `"type": "module"` throughout  
-- **Code splitting** — lazy-loaded dashboard modules + Rollup `manualChunks` for vendor bundles (React, charts, PDF, motion, three)
+- **@vitejs/plugin-react** - Fast Refresh for React  
+- **@tailwindcss/vite** - Tailwind v4 Vite integration  
+- **ESM** - `"type": "module"` throughout  
+- **Code splitting** - lazy-loaded dashboard modules + Rollup `manualChunks` for vendor bundles (React, charts, PDF, motion, three)
 
 ### Project structure
 
@@ -249,9 +249,3 @@ coworkingos/
 ### Data model (summary)
 
 Core entities are defined in `src/types.ts`, including: `Branch`, `Desk`, `Lead`, `Invoice`, `Visitor`, `ClientOnboarding`, `Proposal`, `Employee`, `Ticket`, `InternalTask`, `ChatMessage`, `CMSSettings`, `IntegrationSetting`, `WorkspaceRenewal`, and `UserSettings`.
-
----
-
-## License
-
-Demonstration prototype — customize and extend for your deployment. Add a backend, authentication, and real multi-tenancy when moving beyond the demo.
