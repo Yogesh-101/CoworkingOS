@@ -1,12 +1,19 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useRef } from 'react';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { useStore } from '@/store';
+import { cn } from '@/lib/utils';
 
 export function Layout({ children }: { children: ReactNode }) {
   const activeTab = useStore(state => state.activeTab);
-  
+  const mainRef = useRef<HTMLElement>(null);
+  const isFullHeightModule = activeTab === 'team-chat';
+
+  useEffect(() => {
+    mainRef.current?.scrollTo({ top: 0 });
+  }, [activeTab]);
+
   return (
     <div className="flex h-screen w-full bg-[#050505] overflow-hidden relative text-zinc-200">
       {/* Dark Stranger Things Abstract Background Elements */}
@@ -15,22 +22,25 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="absolute top-[40%] right-[-10%] w-[20%] h-[30%] rounded-full bg-brand-500/5 blur-[100px] pointer-events-none" />
       
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0 relative z-10">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0 relative z-10">
         <Header />
-        <main className="flex-1 overflow-y-auto p-6 lg:p-8">
-          <div className="max-w-7xl mx-auto h-full">
-            <AnimatePresence mode="wait">
-               <motion.div
-                 key={activeTab}
-                 initial={{ opacity: 0, y: 10 }}
-                 animate={{ opacity: 1, y: 0 }}
-                 exit={{ opacity: 0, y: -10 }}
-                 transition={{ duration: 0.2, ease: "easeOut" }}
-                 className="h-full"
-               >
-                 {children}
-               </motion.div>
-            </AnimatePresence>
+        <main
+          ref={mainRef}
+          className={cn(
+            'flex-1 min-h-0 p-6 lg:p-8',
+            isFullHeightModule ? 'overflow-hidden' : 'overflow-y-auto'
+          )}
+        >
+          <div className="max-w-7xl mx-auto h-full min-h-0 flex flex-col">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="h-full min-h-0 flex flex-col"
+            >
+              {children}
+            </motion.div>
           </div>
         </main>
       </div>

@@ -12,6 +12,8 @@ export default defineConfig(() => {
       },
     },
     build: {
+      // Silence the default 500kB warning for large (but intentional) vendor chunks.
+      chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
           manualChunks(id) {

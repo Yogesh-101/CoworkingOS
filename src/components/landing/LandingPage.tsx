@@ -9,7 +9,7 @@ import { Radar, IconContainer } from '@/components/ui/radar-effect';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 
 export function LandingPage() {
-  const setView = useStore(state => state.setView);
+  const requestPlatformAccess = useStore((state) => state.requestPlatformAccess);
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'annually'>('annually');
   const containerRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end start"] });
@@ -80,11 +80,11 @@ export function LandingPage() {
               <a href="#about" onClick={(e) => handleScrollTo(e, 'about')} className="hover:text-white transition-colors">About Us</a>
            </div>
            <div className="flex items-center gap-4">
-             <button className="text-sm font-medium text-zinc-400 hover:text-white hidden sm:block transition-colors" onClick={() => setView('app')}>
+             <button className="text-sm font-medium text-zinc-400 hover:text-white hidden sm:block transition-colors" onClick={() => requestPlatformAccess()}>
                Sign In
              </button>
              <button 
-               onClick={() => setView('app')}
+               onClick={() => requestPlatformAccess()}
                className="group bg-brand-600 text-white px-5 py-1.5 sm:py-2 rounded-full text-sm font-bold hover:bg-brand-500 transition-all flex items-center gap-2"
              >
                Enter Platform
@@ -133,7 +133,7 @@ export function LandingPage() {
           className="mt-12 flex flex-col sm:flex-row items-center gap-4"
         >
           <button 
-            onClick={() => setView('app')}
+            onClick={() => requestPlatformAccess()}
             className="group relative px-8 py-4 bg-brand-600 text-white rounded-full font-bold text-lg overflow-hidden transition-all hover:scale-105 active:scale-95 shadow-[0_20px_40px_-10px_rgba(255,10,22,0.5)]"
           >
             <div className="absolute inset-0 bg-gradient-to-r from-brand-500 via-rose-600 to-red-700 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
@@ -475,7 +475,7 @@ export function LandingPage() {
 
                   {/* Action button */}
                   <button
-                    onClick={() => setView('app')}
+                    onClick={() => requestPlatformAccess()}
                     className={cn(
                       "w-full py-4 px-6 rounded-2xl text-xs font-bold transition-all duration-300 active:scale-98 flex items-center justify-center gap-2 cursor-pointer shadow-md",
                       plan.popular
@@ -528,7 +528,7 @@ export function LandingPage() {
               duration: 0.8,
               ease: "easeInOut",
             }}
-            onClick={() => setView('app')}
+            onClick={() => requestPlatformAccess()}
             className="px-10 py-5 bg-brand-500 text-white rounded-full font-bold text-xl hover:bg-brand-600 hover:scale-105 active:scale-95 transition-all shadow-[0_0_40px_rgba(255,10,22,0.3)] flex items-center gap-3 mx-auto"
           >
             Launch Platform Preview

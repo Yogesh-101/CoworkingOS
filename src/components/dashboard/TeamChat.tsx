@@ -1,194 +1,428 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useStore } from '@/store';
 import { motion, AnimatePresence } from 'motion/react';
-import { MessageSquare, Send, Users, AlertCircle, Sparkles, Hash, CircleDot } from 'lucide-react';
+import {
+  MessageSquare,
+  Send,
+  Hash,
+  Megaphone,
+  AlertTriangle,
+  Sparkles,
+  Pin,
+  Zap,
+  Users,
+  Bell,
+  Coffee,
+  Wifi,
+  CreditCard,
+  PartyPopper,
+  Building2,
+  CircleDot,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
+type ChannelId =
+  | 'ops-downtown-hq'
+  | 'billing-urgent'
+  | 'general'
+  | 'facility-alerts'
+  | 'member-shoutouts'
+  | 'branch-westside';
+
+const CHANNELS = [
+  {
+    id: 'ops-downtown-hq' as const,
+    label: 'ops-downtown-hq',
+    desc: 'Visitor arrivals, tours & daily ops handoffs',
+    icon: Building2,
+    unread: 0,
+    accent: 'brand',
+  },
+  {
+    id: 'billing-urgent' as const,
+    label: 'billing-urgent',
+    desc: 'Overdue invoices, renewals & payment escalations',
+    icon: CreditCard,
+    unread: 2,
+    accent: 'amber',
+  },
+  {
+    id: 'facility-alerts' as const,
+    label: 'facility-alerts',
+    desc: 'HVAC, WiFi outages & automated ticket pings',
+    icon: Wifi,
+    unread: 1,
+    accent: 'rose',
+  },
+  {
+    id: 'general' as const,
+    label: 'general-discussions',
+    desc: 'Announcements, huddles & community culture',
+    icon: Megaphone,
+    unread: 0,
+    accent: 'purple',
+  },
+  {
+    id: 'member-shoutouts' as const,
+    label: 'member-shoutouts',
+    desc: 'Celebrate wins & member milestones',
+    icon: PartyPopper,
+    unread: 0,
+    accent: 'emerald',
+  },
+  {
+    id: 'branch-westside' as const,
+    label: 'westside-oasis',
+    desc: 'Austin campus — local staff coordination only',
+    icon: Coffee,
+    unread: 0,
+    accent: 'zinc',
+  },
+];
+
+const QUICK_TEMPLATES = [
+  { label: 'Visitor arriving', text: 'Guest arriving in 10 min — please prep reception and notify host.', icon: Users },
+  { label: 'Invoice follow-up', text: 'Following up on overdue invoice — can billing confirm status?', icon: CreditCard },
+  { label: 'Room ready', text: 'Private suite is cleaned and access keys are staged at front desk.', icon: Sparkles },
+  { label: 'WiFi incident', text: 'Network latency spike reported on Floor 2 — IT investigating.', icon: Wifi, priority: 'urgent' as const },
+  { label: 'Team huddle', text: 'Quick 15-min standup in the lounge at :30 — all hosts welcome.', icon: Coffee },
+];
+
+const ONLINE_STAFF = [
+  { name: 'Monica Hall', role: 'Community Host', status: 'online' },
+  { name: 'Jared Dunn', role: 'IT Support', status: 'busy' },
+  { name: 'Gavin Belson', role: 'Branch Manager', status: 'online' },
+  { name: 'Gilfoyle Stone', role: 'IT Support', status: 'away' },
+];
+
 export function TeamChat() {
-  const { chatMessages, addChatMessage, role } = useStore();
-  const [activeChannel, setActiveChannel] = useState('ops-downtown-hq');
+  const { chatMessages, addChatMessage, role, employees } = useStore();
+  const [activeChannel, setActiveChannel] = useState<ChannelId>('ops-downtown-hq');
   const [inputText, setInputText] = useState('');
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [markUrgent, setMarkUrgent] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(true);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
+  const shouldStickToBottomRef = useRef(true);
 
-  const channels = [
-    { id: 'ops-downtown-hq', label: 'ops-downtown-hq', desc: 'Main operations coord & visitor arrivals alerts', unread: 0 },
-    { id: 'billing-urgent', label: 'billing-urgent', desc: 'Overdue leases audits & payment reminders log', unread: 2 },
-    { id: 'general', label: 'general-discussions', desc: 'Community announcements & weekly team huddles', unread: 0 },
-  ];
+  const adminName = useMemo(
+    () => (typeof localStorage !== 'undefined' ? localStorage.getItem('co_admin_name') : null) || 'Admin User',
+    []
+  );
 
-  const filteredMessages = chatMessages.filter(m => m.channel === activeChannel);
-
-  // Auto scroll to bottom
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const filteredMessages = chatMessages.filter((m) => m.channel === activeChannel);
+  const pinnedMessage = filteredMessages.find((m) => m.pinned);
+  const threadMessages = filteredMessages.filter((m) => !m.pinned);
+  const activeChannelMeta = CHANNELS.find((c) => c.id === activeChannel)!;
 
   useEffect(() => {
-    scrollToBottom();
+    shouldStickToBottomRef.current = true;
+  }, [activeChannel]);
+
+  // Scroll only inside the message list — never the page (scrollIntoView jumps the main layout).
+  useEffect(() => {
+    const el = messagesScrollRef.current;
+    if (!el || !shouldStickToBottomRef.current) return;
+    el.scrollTop = el.scrollHeight;
   }, [chatMessages, activeChannel]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputText.trim()) return;
+  const handleMessagesScroll = () => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldStickToBottomRef.current = distanceFromBottom < 80;
+  };
 
-    // Add user message
-    addChatMessage(activeChannel, inputText, 'Admin User', role);
-    const sentText = inputText;
+  const sendMessage = (text: string, urgent = false) => {
+    if (!text.trim()) return;
+    shouldStickToBottomRef.current = true;
+    addChatMessage(activeChannel, text.trim(), adminName, role, {
+      priority: urgent ? 'urgent' : 'normal',
+    });
     setInputText('');
+    setMarkUrgent(false);
 
-    // Trigger highly realistic delayed coworker reply
     setTimeout(() => {
       let replyAuthor = 'Monica Hall';
       let replyRole = 'Community Host';
-      let replyMsg = `Got it. Let's record this and solve it on our daily sync!`;
+      let replyMsg = `Copied — logged for the ${activeChannelMeta.label} thread.`;
 
-      const lowerText = sentText.toLowerCase();
-
-      if (activeChannel === 'billing-urgent') {
+      const lower = text.toLowerCase();
+      if (activeChannel === 'billing-urgent' || lower.includes('invoice')) {
         replyAuthor = 'Gavin Belson';
         replyRole = 'Branch Manager';
-        replyMsg = `I am reviewing the pending invoices ledger now. Perry promised to resolve daily planet payment by noon.`;
-      } else if (lowerText.includes('wifi') || lowerText.includes('internet') || lowerText.includes('network')) {
+        replyMsg = 'Finance desk is on it. I will update the AR ledger within the hour.';
+      } else if (lower.includes('wifi') || lower.includes('network') || activeChannel === 'facility-alerts') {
         replyAuthor = 'Jared Dunn';
         replyRole = 'IT Support';
-        replyMsg = `On it! I will run packet diagnostic checks on the primary fiber gateway immediately.`;
-      } else if (lowerText.includes('visitor') || lowerText.includes('guest') || lowerText.includes('tour')) {
+        replyMsg = 'Running diagnostics on the gateway now. Will post ETA in this channel.';
+      } else if (lower.includes('visitor') || lower.includes('guest')) {
         replyAuthor = 'Monica Hall';
         replyRole = 'Community Host';
-        replyMsg = `Awesome, I'll welcome them at the reception desk myself. Making sure hot coffee is fresh.`;
-      } else {
-        replyAuthor = 'Monica Hall';
-        replyRole = 'Community Host';
-        replyMsg = `Roger that. Communicated to Gavin and Jared as well to keep focus.`;
+        replyMsg = 'Reception is briefed. Hot coffee and name badge are ready.';
       }
 
       addChatMessage(activeChannel, replyMsg, replyAuthor, replyRole);
-    }, 1200);
+    }, 1100);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    sendMessage(inputText, markUrgent);
   };
 
   return (
-    <div className="flex h-full border border-zinc-805 bg-zinc-900 rounded-3xl overflow-hidden shadow-lg">
-      
-      {/* Channels Sidebar List left (1/4 width) */}
-      <div className="w-1/3 max-w-[280px] border-r border-zinc-805 bg-zinc-950/40 p-5 flex flex-col space-y-4 shrink-0">
-        <div className="flex items-center gap-2 border-b border-zinc-805/55 pb-3.5">
-          <MessageSquare className="w-4 h-4 text-brand-500" />
-          <h3 className="font-extrabold text-white text-sm">ERP Team Comms</h3>
-        </div>
-
-        <div className="flex-1 flex flex-col gap-2.5 overflow-y-auto">
-          {channels.map((chan) => {
-            const isActive = chan.id === activeChannel;
-            return (
-              <button
-                key={chan.id}
-                onClick={() => setActiveChannel(chan.id)}
-                className={cn(
-                  "p-3 rounded-2xl flex flex-col text-left transition-all relative border border-transparent leading-none cursor-pointer",
-                  isActive 
-                    ? "bg-zinc-850 hover:bg-zinc-800 border-zinc-800 shadow-inner" 
-                    : "hover:bg-zinc-900/60"
-                )}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span className={cn(
-                    "font-extrabold text-xs flex items-center gap-1.5",
-                    isActive ? "text-brand-400" : "text-zinc-400 group-hover:text-zinc-200"
-                  )}>
-                    <Hash className={cn("w-3.5 h-3.5", isActive ? "text-brand-500" : "text-zinc-650")} /> 
-                    {chan.label}
-                  </span>
-
-                  {chan.unread > 0 && !isActive && (
-                    <span className="w-2 h-2 rounded-full bg-brand-505 shrink-0" />
-                  )}
-                </div>
-                <p className="text-[10px] text-zinc-550 mt-1.5 font-semibold leading-normal">{chan.desc}</p>
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="bg-zinc-950 px-3.5 py-3 rounded-2xl border border-zinc-850 leading-none">
-          <span className="text-[8px] font-extrabold text-zinc-550 uppercase">CHATTING COORD AS</span>
-          <p className="text-xs text-brand-350 font-extrabold truncate mt-1 capitalize leading-none font-sans flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-brand-400" /> {role}
+    <div className="flex flex-col h-full min-h-0 space-y-4">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 shrink-0">
+        <div>
+          <h1 className="text-xl font-black text-white flex items-center gap-2">
+            <MessageSquare className="w-5 h-5 text-brand-500" />
+            Team Chat
+          </h1>
+          <p className="text-xs text-zinc-500 font-medium mt-1">
+            ERP comms hub — channels, quick actions, and live staff presence
           </p>
         </div>
-      </div>
-
-      {/* Main Chat Stream right (3/4 width) */}
-      <div className="flex-1 flex flex-col justify-between bg-zinc-900/40 min-w-0">
-        
-        {/* Channel Active Header */}
-        <div className="p-4.5 border-b border-zinc-805 bg-zinc-900/70 flex items-center justify-between">
-          <div>
-            <span className="text-xs font-bold text-white flex items-center gap-1.5 leading-none">
-              <Hash className="w-4 h-4 text-zinc-650" /> {activeChannel}
-            </span>
-            <p className="text-[10px] text-zinc-500 font-semibold mt-1">
-              Active coordinate group link for on-site managers
-            </p>
-          </div>
-
-          <span className="text-[10px] font-mono text-zinc-500 bg-zinc-950 px-2.5 py-1 border border-zinc-850 rounded-full font-bold">
-            Live Link
+        <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+          <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <CircleDot className="w-2 h-2 fill-emerald-400 text-emerald-400" /> Slack sync live
+          </span>
+          <span className="px-2.5 py-1 rounded-full bg-zinc-900 border border-zinc-805 text-zinc-450">
+            {employees.filter((e) => e.status === 'active').length} staff active
           </span>
         </div>
-
-        {/* Message logs */}
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {filteredMessages.map((msg) => {
-            const isMe = msg.senderName === 'Admin User';
-            return (
-              <div 
-                key={msg.id}
-                className={cn(
-                  "flex flex-col max-w-[85%]",
-                  isMe ? "ml-auto items-end" : "mr-auto items-start"
-                )}
-              >
-                {/* Meta details */}
-                <span className="text-[9px] text-zinc-550 font-bold tracking-tight mb-1 font-sans">
-                  {msg.senderName} ({msg.senderRole}) • <span className="font-mono">{msg.time}</span>
-                </span>
-
-                {/* Message bubble */}
-                <div className={cn(
-                  "rounded-2xl p-3.5 text-xs font-semibold leading-relaxed border shadow-sm",
-                  isMe 
-                    ? "bg-brand-500 text-white border-brand-400/20 rounded-tr-none" 
-                    : "bg-zinc-950 text-zinc-200 border-zinc-805/60 rounded-tl-none"
-                )}>
-                  {msg.text}
-                </div>
-              </div>
-            );
-          })}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {/* Input panel Form */}
-        <form onSubmit={handleSendMessage} className="p-4 border-t border-zinc-850/80 bg-zinc-950/30 flex gap-3 items-center shrink-0">
-          <input 
-            type="text"
-            placeholder={`Message #${activeChannel}...`}
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            className="flex-1 bg-zinc-950 border border-zinc-805 rounded-full py-2.5 px-5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/30 font-semibold"
-          />
-
-          <button
-            type="submit"
-            className="w-10 h-10 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center cursor-pointer shadow-md shadow-brand-500/10 active:scale-95 transition-all shrink-0"
-          >
-            <Send className="w-4 h-4" />
-          </button>
-        </form>
-
       </div>
 
+      <div className="flex flex-1 min-h-0 max-h-full border border-zinc-805 bg-zinc-900 rounded-3xl overflow-hidden shadow-lg">
+        {/* Channels */}
+        <div className="w-full max-w-[300px] border-r border-zinc-805 bg-zinc-950/50 p-4 flex flex-col gap-3 shrink-0 hidden md:flex">
+          <div className="flex items-center justify-between">
+            <span className="text-[9px] font-black text-zinc-550 uppercase tracking-widest">Channels</span>
+            <Bell className="w-3.5 h-3.5 text-zinc-600" />
+          </div>
+
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+            {CHANNELS.map((chan) => {
+              const isActive = chan.id === activeChannel;
+              const Icon = chan.icon;
+              return (
+                <button
+                  key={chan.id}
+                  type="button"
+                  onClick={() => setActiveChannel(chan.id)}
+                  className={cn(
+                    'w-full p-3 rounded-2xl flex flex-col text-left transition-all border leading-none cursor-pointer',
+                    isActive
+                      ? 'bg-zinc-850 border-zinc-750 shadow-inner'
+                      : 'border-transparent hover:bg-zinc-900/70'
+                  )}
+                >
+                  <div className="flex items-center justify-between w-full gap-2">
+                    <span
+                      className={cn(
+                        'font-extrabold text-xs flex items-center gap-1.5 min-w-0',
+                        isActive ? 'text-brand-400' : 'text-zinc-400'
+                      )}
+                    >
+                      <Icon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate">#{chan.label}</span>
+                    </span>
+                    {chan.unread > 0 && !isActive && (
+                      <span className="text-[9px] font-black bg-brand-500 text-white px-1.5 py-0.5 rounded-full shrink-0">
+                        {chan.unread}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-zinc-550 mt-1.5 font-semibold leading-snug line-clamp-2">
+                    {chan.desc}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="border-t border-zinc-850 pt-3 space-y-2">
+            <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-widest block">
+              On duty now
+            </span>
+            {ONLINE_STAFF.map((s) => (
+              <div key={s.name} className="flex items-center gap-2 text-[10px]">
+                <span
+                  className={cn(
+                    'w-1.5 h-1.5 rounded-full shrink-0',
+                    s.status === 'online' && 'bg-emerald-400',
+                    s.status === 'busy' && 'bg-amber-400',
+                    s.status === 'away' && 'bg-zinc-600'
+                  )}
+                />
+                <span className="font-bold text-zinc-300 truncate">{s.name}</span>
+                <span className="text-zinc-600 truncate ml-auto">{s.status}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Main thread */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="p-4 border-b border-zinc-805 bg-zinc-900/80 flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <span className="text-sm font-bold text-white flex items-center gap-1.5">
+                <Hash className="w-4 h-4 text-zinc-600 shrink-0" />
+                {activeChannelMeta.label}
+              </span>
+              <p className="text-[10px] text-zinc-500 font-medium mt-0.5 truncate">
+                {activeChannelMeta.desc}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowTemplates((v) => !v)}
+              className="text-[10px] font-bold text-brand-400 hover:text-brand-300 flex items-center gap-1 shrink-0 cursor-pointer"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              {showTemplates ? 'Hide' : 'Show'} quick actions
+            </button>
+          </div>
+
+          {/* Mobile channel picker */}
+          <div className="md:hidden flex gap-1.5 p-2 overflow-x-auto border-b border-zinc-850 scrollbar-none">
+            {CHANNELS.map((chan) => (
+              <button
+                key={chan.id}
+                type="button"
+                onClick={() => setActiveChannel(chan.id)}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg text-[10px] font-bold whitespace-nowrap shrink-0 cursor-pointer',
+                  activeChannel === chan.id
+                    ? 'bg-brand-500/15 text-brand-400 border border-brand-500/25'
+                    : 'bg-zinc-950 text-zinc-500 border border-zinc-850'
+                )}
+              >
+                #{chan.label.split('-')[0]}
+              </button>
+            ))}
+          </div>
+
+          <AnimatePresence>
+            {showTemplates && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: 'auto', opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                className="overflow-hidden border-b border-zinc-850/80"
+              >
+                <div className="p-3 flex flex-wrap gap-2 bg-zinc-950/40">
+                  {QUICK_TEMPLATES.map((tpl) => {
+                    const TplIcon = tpl.icon;
+                    return (
+                      <button
+                        key={tpl.label}
+                        type="button"
+                        onClick={() => sendMessage(tpl.text, tpl.priority === 'urgent')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-805 hover:border-brand-500/30 hover:text-brand-300 text-[10px] font-bold text-zinc-400 transition-all cursor-pointer"
+                      >
+                        <TplIcon className="w-3 h-3 shrink-0" />
+                        {tpl.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {pinnedMessage && (
+            <div className="mx-4 mt-3 p-3 rounded-2xl bg-brand-500/5 border border-brand-500/20 flex gap-2">
+              <Pin className="w-4 h-4 text-brand-500 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <span className="text-[9px] font-black text-brand-400 uppercase tracking-wider">
+                  Pinned
+                </span>
+                <p className="text-xs text-zinc-200 font-semibold mt-0.5 leading-relaxed">
+                  {pinnedMessage.text}
+                </p>
+                <span className="text-[9px] text-zinc-550 mt-1 block">
+                  {pinnedMessage.senderName} · {pinnedMessage.time}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div
+            ref={messagesScrollRef}
+            onScroll={handleMessagesScroll}
+            className="flex-1 overflow-y-auto overflow-x-hidden p-4 space-y-3 min-h-0"
+          >
+            {threadMessages.length === 0 && !pinnedMessage && (
+              <div className="flex flex-col items-center justify-center h-full text-center py-12 text-zinc-600">
+                <MessageSquare className="w-10 h-10 mb-3 opacity-40" />
+                <p className="text-sm font-bold">No messages yet</p>
+                <p className="text-xs mt-1 max-w-xs">Use quick actions above or type below to start the thread.</p>
+              </div>
+            )}
+            {threadMessages.map((msg) => {
+              const isMe = msg.senderName === adminName;
+              const isUrgent = msg.priority === 'urgent';
+              return (
+                <div
+                  key={msg.id}
+                  className={cn('flex flex-col max-w-[88%]', isMe ? 'ml-auto items-end' : 'mr-auto items-start')}
+                >
+                  <span className="text-[9px] text-zinc-550 font-bold mb-1 flex items-center gap-1.5">
+                    {isUrgent && (
+                      <AlertTriangle className="w-3 h-3 text-amber-500" aria-label="Urgent" />
+                    )}
+                    {msg.senderName} ({msg.senderRole}) · {msg.time}
+                  </span>
+                  <div
+                    className={cn(
+                      'rounded-2xl p-3.5 text-xs font-semibold leading-relaxed border shadow-sm',
+                      isMe
+                        ? 'bg-brand-500 text-white border-brand-400/20 rounded-tr-sm'
+                        : 'bg-zinc-950 text-zinc-200 border-zinc-805/60 rounded-tl-sm',
+                      isUrgent && !isMe && 'border-amber-500/30 bg-amber-500/5'
+                    )}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <form
+            onSubmit={handleSubmit}
+            className="p-4 border-t border-zinc-850/80 bg-zinc-950/40 space-y-2 shrink-0"
+          >
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setMarkUrgent((v) => !v)}
+                className={cn(
+                  'px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border transition-all cursor-pointer shrink-0',
+                  markUrgent
+                    ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                    : 'bg-zinc-900 text-zinc-550 border-zinc-805 hover:text-zinc-300'
+                )}
+              >
+                Urgent
+              </button>
+              <input
+                type="text"
+                placeholder={`Message #${activeChannelMeta.label}…`}
+                value={inputText}
+                onChange={(e) => setInputText(e.target.value)}
+                className="flex-1 bg-zinc-950 border border-zinc-805 rounded-full py-2.5 px-5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/30 font-semibold min-w-0"
+              />
+              <button
+                type="submit"
+                className="w-10 h-10 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center cursor-pointer shadow-md active:scale-95 transition-all shrink-0"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
     </div>
   );
 }

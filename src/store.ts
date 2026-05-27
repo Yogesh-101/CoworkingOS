@@ -6,6 +6,7 @@ import {
   IntegrationSetting, WorkspaceRenewal, UserSettings 
 } from './types';
 import { subDays, format } from 'date-fns';
+import type { AppTab, UserRole } from './lib/rbac';
 
 export interface Notification {
   id: string;
@@ -17,17 +18,20 @@ export interface Notification {
 }
 
 interface AppState {
-  view: 'landing' | 'app';
-  setView: (view: 'landing' | 'app') => void;
+  view: 'landing' | 'role-select' | 'app';
+  setView: (view: AppState['view']) => void;
+  requestPlatformAccess: () => void;
+  enterAppWithRole: (role: UserRole) => void;
+  openRoleSelect: () => void;
   
-  activeTab: 'dashboard' | 'floor-map' | 'crm' | 'visitors' | 'helpdesk' | 'billing' | 'team-chat' | 'cms' | 'admin' | 'settings';
-  setActiveTab: (tab: AppState['activeTab']) => void;
+  activeTab: AppTab;
+  setActiveTab: (tab: AppTab) => void;
   
   activeBranchId: string;
   setActiveBranchId: (id: string) => void;
   
-  role: 'Super Admin' | 'Community Host' | 'Receptionist';
-  setRole: (role: 'Super Admin' | 'Community Host' | 'Receptionist') => void;
+  role: UserRole;
+  setRole: (role: UserRole) => void;
   
   branches: Branch[];
   leads: Lead[];
@@ -66,9 +70,14 @@ interface AppState {
   addTask: (task: Omit<InternalTask, 'id' | 'status'>) => void;
   updateTaskStatus: (id: string, status: InternalTask['status']) => void;
   
-  // Team Chat
   chatMessages: ChatMessage[];
-  addChatMessage: (channel: string, text: string, senderName: string, senderRole: string) => void;
+  addChatMessage: (
+    channel: string,
+    text: string,
+    senderName: string,
+    senderRole: string,
+    options?: { priority?: ChatMessage['priority'] }
+  ) => void;
   
   // Website CMS Settings
   cmsSettings: CMSSettings;
@@ -230,12 +239,13 @@ const mockTasks: InternalTask[] = [
   { id: 'tsk-2', title: 'Restore printer toner cartridge Level 3', description: 'Install high-yield black ink toner unit on Floor 3 north xerox module.', priority: 'high', status: 'in-progress', assignedTo: 'emp-3', dueDate: 'May 27, 2026' },
 ];
 
-// Team Chat Channels
 const mockChatMessages: ChatMessage[] = [
-  { id: 'msg-1', channel: 'ops-downtown-hq', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Hi team, Sarah from Acme SaaS is looking to upgrade to Private Suite Room 4 next month. Adding a proposal note.', time: '10:14 AM' },
-  { id: 'msg-2', channel: 'ops-downtown-hq', senderName: 'Jared Dunn', senderRole: 'IT Support', text: 'Sounds great. I will handle the dedicated fiber port configuration before they move in.', time: '10:22 AM' },
-  { id: 'msg-3', channel: 'billing-urgent', senderName: 'Gavin Belson', senderRole: 'Branch Manager', text: 'Daily Planet invoice INV-2043 is 8 days overdue. Can someone reach out to Perry is the morning?', time: 'Yesterday' },
-  { id: 'msg-4', channel: 'general', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Good morning everyone! Have an outstanding day helping creators build their dreams!', time: '09:00 AM' },
+  { id: 'msg-1', channel: 'ops-downtown-hq', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Sarah from Acme SaaS wants Private Suite Room 4 next month — proposal draft attached in CRM.', time: '10:14 AM', pinned: true },
+  { id: 'msg-2', channel: 'ops-downtown-hq', senderName: 'Jared Dunn', senderRole: 'IT Support', text: 'Fiber port pre-config scheduled before move-in. ETA Thursday.', time: '10:22 AM' },
+  { id: 'msg-3', channel: 'billing-urgent', senderName: 'Gavin Belson', senderRole: 'Branch Manager', text: 'INV-2043 (Daily Planet) is 8 days overdue — need outreach before noon.', time: '09:48 AM', priority: 'urgent' },
+  { id: 'msg-4', channel: 'general', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Friday community breakfast at 9 AM in the lounge — all hosts welcome!', time: '09:00 AM' },
+  { id: 'msg-5', channel: 'facility-alerts', senderName: 'System', senderRole: 'Automated', text: 'Conference Room 2 HVAC flagged — facilities ticket #t-2 linked.', time: '08:15 AM', priority: 'urgent' },
+  { id: 'msg-6', channel: 'member-shoutouts', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Shoutout to Stellar Tech for hitting 100% onboarding checklist this week!', time: 'Yesterday' },
 ];
 
 // CMS Live Customizable State
@@ -268,6 +278,12 @@ const mockRenewals: WorkspaceRenewal[] = [
 export const useStore = create<AppState>((set) => ({
   view: 'landing',
   setView: (view) => set({ view }),
+  requestPlatformAccess: () => set({ view: 'role-select' }),
+  enterAppWithRole: (role) => {
+    localStorage.setItem('co_admin_role', role);
+    set({ role, view: 'app', activeTab: 'dashboard' });
+  },
+  openRoleSelect: () => set({ view: 'role-select' }),
   
   activeTab: 'dashboard',
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -597,8 +613,7 @@ export const useStore = create<AppState>((set) => ({
     tasks: state.tasks.map(t => t.id === id ? { ...t, status } : t)
   })),
   
-  // Chat Actions
-  addChatMessage: (channel, text, senderName, senderRole) => set((state) => ({
+  addChatMessage: (channel, text, senderName, senderRole, options) => set((state) => ({
     chatMessages: [
       ...state.chatMessages,
       {
@@ -607,9 +622,10 @@ export const useStore = create<AppState>((set) => ({
         senderName,
         senderRole,
         text,
-        time: format(new Date(), 'hh:mm a')
-      }
-    ]
+        time: format(new Date(), 'hh:mm a'),
+        priority: options?.priority ?? 'normal',
+      },
+    ],
   })),
   
   // CMS Updater

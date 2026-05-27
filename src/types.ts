@@ -134,11 +134,13 @@ export interface InternalTask {
 // Team Chat
 export interface ChatMessage {
   id: string;
-  channel: string; // 'ops-downtown' | 'billing-urgent' | 'general'
+  channel: string;
   senderName: string;
   senderRole: string;
   text: string;
   time: string;
+  priority?: 'normal' | 'urgent';
+  pinned?: boolean;
 }
 
 // Website CMS settings

@@ -1,6 +1,7 @@
-import { lazy, Suspense, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Layout } from './components/layout/Layout';
 import { LandingPage } from './components/landing/LandingPage';
+import { RoleSelectScreen } from './components/auth/RoleSelectScreen';
 import { useStore } from './store';
 
 const DashboardOverview = lazy(() =>
@@ -25,8 +26,8 @@ const TeamChat = lazy(() =>
 const WebsiteCMS = lazy(() =>
   import('./components/dashboard/WebsiteCMS').then((m) => ({ default: m.WebsiteCMS }))
 );
-const AdminPanel = lazy(() =>
-  import('./components/dashboard/AdminPanel').then((m) => ({ default: m.AdminPanel }))
+const ErpPage = lazy(() =>
+  import('./components/dashboard/AdminPanel').then((m) => ({ default: m.ErpPage }))
 );
 const Settings = lazy(() =>
   import('./components/dashboard/Settings').then((m) => ({ default: m.Settings }))
@@ -69,8 +70,8 @@ function ActiveModule() {
     case 'cms':
       module = <WebsiteCMS />;
       break;
-    case 'admin':
-      module = <AdminPanel />;
+    case 'erp':
+      module = <ErpPage />;
       break;
     case 'settings':
       module = <Settings />;
@@ -82,11 +83,26 @@ function ActiveModule() {
   return <Suspense fallback={<ModuleFallback />}>{module}</Suspense>;
 }
 
+function preloadAppModules() {
+  void import('./components/dashboard/Billing');
+  void import('./components/dashboard/TeamChat');
+  void import('./components/dashboard/WebsiteCMS');
+  void import('./components/dashboard/AdminPanel');
+}
+
 export default function App() {
   const view = useStore((state) => state.view);
 
+  useEffect(() => {
+    if (view === 'app') preloadAppModules();
+  }, [view]);
+
   if (view === 'landing') {
     return <LandingPage />;
+  }
+
+  if (view === 'role-select') {
+    return <RoleSelectScreen />;
   }
 
   return (

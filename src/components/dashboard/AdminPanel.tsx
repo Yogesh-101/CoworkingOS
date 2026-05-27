@@ -2,18 +2,18 @@ import React, { useState } from 'react';
 import { useStore } from '@/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
-  ShieldCheck, UserCheck, Key, RefreshCw, Smartphone, 
-  Slack, CreditCard, Mail, Plus, X, Users, CheckCircle, 
-  Terminal, ArrowRight, ShieldAlert, BadgeInfo 
+  ShieldCheck, Key, RefreshCw, 
+  Slack, CreditCard, Mail, Plus, X, Users, 
+  Terminal,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Employee, IntegrationSetting } from '@/types';
 
-export function AdminPanel() {
+export function ErpPage() {
   const { 
     employees, addEmployee, updateEmployeeStatus,
     integrations, toggleIntegration, updateIntegrationWebhook,
-    role, setRole, branches, activeBranchId 
+    branches, activeBranchId 
   } = useStore();
 
   const [isNewEmployeeOpen, setIsNewEmployeeOpen] = useState(false);
@@ -80,45 +80,14 @@ export function AdminPanel() {
 
   return (
     <div className="flex flex-col h-full space-y-6">
-      
-      {/* Dynamic RBAC Simulation Bar */}
-      <div className="bg-zinc-950 p-5 rounded-3xl border border-zinc-800 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-inner">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4.5 h-4.5 text-brand-500" />
-            <h3 className="font-extrabold text-white text-xs uppercase tracking-wider">Role-Based Access Control (RBAC) Simulator</h3>
-          </div>
-          <p className="text-[11px] text-zinc-500 font-medium leading-relaxed max-w-xl">
-            Simulate and evaluate operator scopes instantly. Toggling clearances restricts or enables specific ERP modules, mimicking strict enterprise security standards.
-          </p>
-        </div>
-
-        {/* Selected Role Toggler */}
-        <div className="flex bg-zinc-900 border border-zinc-805 p-1 rounded-2xl select-none leading-none items-center gap-1.5 shrink-0 self-start md:self-auto font-sans">
-          {[
-            { id: 'Super Admin', color: 'text-brand-400', desc: 'Full write access' },
-            { id: 'Community Host', color: 'text-purple-400', desc: 'Ops & Chat only' },
-            { id: 'Receptionist', color: 'text-emerald-400', desc: 'Visitors only' }
-          ].map((r) => {
-            const isActive = role === r.id;
-            return (
-              <button
-                key={r.id}
-                onClick={() => setRole(r.id as any)}
-                className={cn(
-                  "px-3.5 py-2.5 rounded-xl text-[10px] font-black transition-all cursor-pointer leading-none text-center flex flex-col items-center gap-0.5 whitespace-nowrap",
-                  isActive 
-                    ? "bg-zinc-800 text-white shadow-sm font-black" 
-                    : "text-zinc-500 hover:text-zinc-400 hover:bg-zinc-900"
-                )}
-                title={r.desc}
-              >
-                <span>{r.id}</span>
-                <span className="text-[7px] text-zinc-550 font-semibold lowercase tracking-tight scale-90">{r.desc}</span>
-              </button>
-            );
-          })}
-        </div>
+      <div>
+        <h1 className="text-xl font-black text-white flex items-center gap-2">
+          <ShieldCheck className="w-5 h-5 text-brand-500" />
+          ERP Admin
+        </h1>
+        <p className="text-xs text-zinc-500 font-medium mt-1">
+          Staff directory, API integrations, and system sync telemetry for enterprise operators.
+        </p>
       </div>
 
       {/* Main Grid: Employees List left, Integrations & Terminal right */}

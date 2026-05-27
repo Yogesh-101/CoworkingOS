@@ -2,11 +2,12 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { cn } from '@/lib/utils';
 import { 
-  LayoutDashboard, Map, Users, FileText, Settings, UserCheck, Check, 
-  ShieldAlert, Award, MessageSquare, ClipboardList, Laptop, ShieldCheck, Lock, Landmark 
+  LayoutDashboard, Map, Users, FileText, Settings, UserCheck, 
+  MessageSquare, ClipboardList, Laptop, ShieldCheck, Lock, LogOut
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import { isTabAllowed } from '@/lib/rbac';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -17,24 +18,17 @@ const navItems = [
   { id: 'billing', label: 'Finance & Billing', icon: FileText },
   { id: 'team-chat', label: 'Team Chat', icon: MessageSquare },
   { id: 'cms', label: 'Public Web CMS', icon: Laptop },
-  { id: 'admin', label: 'ERP Admin & RBAC', icon: ShieldCheck },
+  { id: 'erp', label: 'ERP Admin', icon: ShieldCheck },
 ] as const;
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, role, setRole } = useStore();
+  const { activeTab, setActiveTab, role, openRoleSelect } = useStore();
 
   // Dynamic state for User Profile with local persistence setup
   const [adminName, setAdminName] = useState(() => localStorage.getItem('co_admin_name') || 'Admin User');
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [editName, setEditName] = useState(adminName);
-  const [editRole, setEditRole] = useState(role);
-
   const profilePopoverRef = useRef<HTMLDivElement>(null);
-
-  // Sync edit state when global store role changes
-  useEffect(() => {
-    setEditRole(role);
-  }, [role]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -52,23 +46,16 @@ export function Sidebar() {
     e.preventDefault();
     if (editName.trim()) {
       setAdminName(editName);
-      setRole(editRole);
       localStorage.setItem('co_admin_name', editName);
       setIsProfileOpen(false);
     }
   };
 
-  // Check RBAC permission for each tab based on active role
-  const isTabAllowed = (tabId: string) => {
-    if (role === 'Super Admin') return true;
-    if (role === 'Community Host') {
-      return ['dashboard', 'floor-map', 'crm', 'visitors', 'helpdesk', 'team-chat'].includes(tabId);
-    }
-    if (role === 'Receptionist') {
-      return ['dashboard', 'visitors', 'helpdesk'].includes(tabId);
-    }
-    return true;
-  };
+  const canAccessTab = (tabId: string) => isTabAllowed(role, tabId);
+
+  useEffect(() => {
+    if (!canAccessTab(activeTab)) setActiveTab('dashboard');
+  }, [activeTab, role, setActiveTab]);
 
   return (
     <div className="w-64 border-r border-zinc-805 bg-zinc-950 flex flex-col z-20 shrink-0 h-screen overflow-hidden">
@@ -86,7 +73,7 @@ export function Sidebar() {
         <div className="px-3 mb-2.5 text-[9px] font-black text-zinc-550 uppercase tracking-widest leading-none">Modules</div>
         
         {navItems.map((item) => {
-          const isAllowed = isTabAllowed(item.id);
+          const isAllowed = canAccessTab(item.id);
           const isActive = activeTab === item.id;
           
           return (
@@ -129,13 +116,13 @@ export function Sidebar() {
       {/* Sidebar Footer */}
       <div className="p-4 border-t border-zinc-900 relative shrink-0">
         <button 
-          disabled={role !== 'Super Admin'}
-          onClick={() => role === 'Super Admin' && setActiveTab('settings')}
+          disabled={!canAccessTab('settings')}
+          onClick={() => canAccessTab('settings') && setActiveTab('settings')}
           className={cn(
             "w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-bold transition-all select-none leading-none",
             activeTab === 'settings' 
               ? "text-brand-400 bg-brand-500/10" 
-              : role !== 'Super Admin' 
+              : !canAccessTab('settings')
                 ? "text-zinc-705 cursor-not-allowed opacity-40" 
                 : "text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900/40 cursor-pointer"
           )}
@@ -144,7 +131,7 @@ export function Sidebar() {
             <Settings className="w-4.5 h-4.5 text-zinc-650 shrink-0" />
             <span>Settings</span>
           </div>
-          {role !== 'Super Admin' && (
+          {!canAccessTab('settings') && (
             <Lock className="w-3.5 h-3.5 text-zinc-800 shrink-0" />
           )}
         </button>
@@ -180,49 +167,45 @@ export function Sidebar() {
                   />
                 </div>
 
-                <div className="space-y-1.5 leading-none">
-                  <label className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">Session Authority</label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {['Super Admin', 'Community Host', 'Receptionist'].map((r) => {
-                      const sel = editRole === r;
-                      return (
-                        <button
-                          key={r}
-                          id={`admin-role-opt-${r.replace(/\s+/g, '-').toLowerCase()}`}
-                          type="button"
-                          onClick={() => setEditRole(r as any)}
-                          className={cn(
-                            "py-2 px-1 rounded-lg text-[9px] font-bold border transition-all truncate leading-none cursor-pointer text-center",
-                            sel ? "bg-brand-500/10 border-brand-500/30 text-brand-400" : "bg-transparent border-zinc-805 text-zinc-550 hover:text-zinc-300"
-                          )}
-                        >
-                          {r}
-                        </button>
-                      );
-                    })}
-                  </div>
+                <div className="rounded-xl bg-zinc-900/80 border border-zinc-805 px-3 py-2.5">
+                  <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest block">
+                    Active role
+                  </span>
+                  <span className="text-xs font-bold text-brand-400 mt-1 block">{role}</span>
                 </div>
 
-                <div className="flex items-center gap-2 pt-1">
+                <div className="flex flex-col gap-2 pt-1">
                   <button
-                    id="admin-form-cancel-btn"
                     type="button"
                     onClick={() => {
-                      setEditName(adminName);
-                      setEditRole(role);
                       setIsProfileOpen(false);
+                      openRoleSelect();
                     }}
-                    className="flex-1 py-2 rounded-xl text-[10px] font-bold bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 transition-all cursor-pointer"
+                    className="w-full py-2.5 rounded-xl text-[10px] font-bold bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
-                    Cancel
+                    <LogOut className="w-3.5 h-3.5" />
+                    Switch role
                   </button>
-                  <button
-                    id="admin-form-save-btn"
-                    type="submit"
-                    className="flex-1 py-2 rounded-xl text-[10px] font-bold bg-brand-500 hover:bg-brand-600 text-white shadow-sm transition-all cursor-pointer"
-                  >
-                    Set Active
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      id="admin-form-cancel-btn"
+                      type="button"
+                      onClick={() => {
+                        setEditName(adminName);
+                        setIsProfileOpen(false);
+                      }}
+                      className="flex-1 py-2 rounded-xl text-[10px] font-bold bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-400 transition-all cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      id="admin-form-save-btn"
+                      type="submit"
+                      className="flex-1 py-2 rounded-xl text-[10px] font-bold bg-brand-500 hover:bg-brand-600 text-white shadow-sm transition-all cursor-pointer"
+                    >
+                      Save name
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>
@@ -233,7 +216,6 @@ export function Sidebar() {
         <div 
           onClick={() => {
             setEditName(adminName);
-            setEditRole(role);
             setIsProfileOpen(!isProfileOpen);
           }}
           className={cn(
