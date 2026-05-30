@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils';
 export function Layout({ children }: { children: ReactNode }) {
   const activeTab = useStore(state => state.activeTab);
   const mainRef = useRef<HTMLElement>(null);
-  const isFullHeightModule = activeTab === 'team-chat';
+  const isFullHeightModule = activeTab === 'team-chat' || activeTab === 'cms';
 
   useEffect(() => {
     mainRef.current?.scrollTo({ top: 0 });

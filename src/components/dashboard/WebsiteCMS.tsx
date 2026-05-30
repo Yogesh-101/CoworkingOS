@@ -56,20 +56,20 @@ export function WebsiteCMS() {
   };
 
   return (
-    <div className="flex flex-col h-full space-y-6">
+    <div className="flex flex-col h-full min-h-0 gap-6">
       
       {/* CMS Title */}
-      <div>
+      <div className="shrink-0">
         <h1 className="text-3xl font-display font-bold text-zinc-100 tracking-tight">Website CMS Live Customizer</h1>
         <p className="text-zinc-500 text-sm mt-1">
           Customize your public marketing storefront and pricing tables. Updates synchronize on live sales pipelines.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start flex-1 min-h-0">
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 flex-1 min-h-0 items-stretch">
         
         {/* Visual CMS Controls Form (2 cols) */}
-        <div className="xl:col-span-2 bg-zinc-900 border border-zinc-805 rounded-3xl p-6 shadow-lg space-y-5 h-full overflow-y-auto max-h-[580px]">
+        <div className="xl:col-span-2 bg-zinc-900 border border-zinc-805 rounded-3xl p-6 shadow-lg space-y-5 min-h-0 overflow-y-auto">
           
           <div className="flex items-center gap-2 border-b border-zinc-850 pb-3 flex-wrap">
             <Sliders className="w-4 h-4 text-brand-500" />
@@ -184,47 +184,48 @@ export function WebsiteCMS() {
           </div>
         </div>
 
-        {/* Browser Mockup Public Website Viewport frame (3 cols) */}
-        <div className="xl:col-span-3 h-full flex flex-col justify-between">
+        {/* Browser mockup — fills column height; only the page body scrolls when content overflows */}
+        <div className="xl:col-span-3 flex flex-col h-full min-h-[420px] xl:min-h-0">
           
-          {/* Header toolbar */}
-          <div className="bg-zinc-950 border-t border-x border-zinc-800 rounded-t-3xl p-4.5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80" />
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80" />
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80" />
+          {/* Browser chrome */}
+          <div className="bg-zinc-950 border border-zinc-800 rounded-t-3xl p-4 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-rose-500/80 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500/80 shrink-0" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500/80 shrink-0" />
               
-              <div className="bg-zinc-900 border border-zinc-801/60 rounded-lg text-[10px] text-zinc-500 font-mono px-4.5 py-1 ml-4 flex items-center gap-1.5 select-none font-semibold">
-                <span>https://{cmsSettings.brandName.toLowerCase().replace(/\s+/g,'-')}.io/nyc</span>
-                <span className="text-[8px] bg-emerald-500/10 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded leading-none border border-emerald-500/20 shadow-sm uppercase">Secure SSL</span>
+              <div className="bg-zinc-900 border border-zinc-801/60 rounded-lg text-[10px] text-zinc-500 font-mono px-3 py-1 ml-2 sm:ml-4 flex items-center gap-1.5 select-none font-semibold min-w-0 truncate">
+                <span className="truncate">https://{cmsSettings.brandName.toLowerCase().replace(/\s+/g,'-')}.io/nyc</span>
+                <span className="text-[8px] bg-emerald-500/10 text-emerald-400 font-extrabold px-1.5 py-0.5 rounded leading-none border border-emerald-500/20 shadow-sm uppercase shrink-0">Secure SSL</span>
               </div>
             </div>
 
-            <span className="text-[10px] font-bold text-zinc-450 flex items-center gap-1.5">
-              <Laptop className="w-3.5 h-3.5 text-zinc-550 shrink-0" /> Dynamic Landing Front
+            <span className="text-[10px] font-bold text-zinc-450 flex items-center gap-1.5 shrink-0 ml-2">
+              <Laptop className="w-3.5 h-3.5 text-zinc-550" /> Dynamic Landing Front
             </span>
           </div>
 
-          {/* Real simulated mockup frame container */}
-          <div className="flex-1 bg-zinc-950/80 border-b border-x border-zinc-800 rounded-b-3xl p-6 overflow-y-auto max-h-[500px] shadow-2xl relative min-h-[350px]">
+          {/* Simulated public site viewport */}
+          <div className="flex-1 min-h-0 bg-zinc-950/80 border-x border-b border-zinc-800 rounded-b-3xl shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-4 sm:p-6">
             
             {/* Nav mockup bar within Public site */}
-            <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
-              <div className="flex items-center gap-2">
-                <BrandLogo size="sm" className="h-4 w-4 ring-1 ring-offset-1 ring-offset-zinc-950" />
-                <span className="font-display font-extrabold text-white text-xs tracking-tight capitalize">{cmsSettings.brandName}</span>
+            <div className="flex items-center justify-between gap-3 border-b border-zinc-900 pb-4 mb-6">
+              <div className="flex items-center gap-2 min-w-0">
+                <BrandLogo size="sm" className="h-4 w-4 ring-1 ring-offset-1 ring-offset-zinc-950 shrink-0" />
+                <span className="font-display font-extrabold text-white text-xs tracking-tight capitalize truncate">{cmsSettings.brandName}</span>
               </div>
 
-              <div className="flex items-center gap-4 text-[10px] text-zinc-400 font-bold">
-                <span className="text-zinc-200">Our Hubs</span>
-                <span>Workspaces</span>
-                <span>Amenities</span>
-                <span className={cn("text-[9px] text-white px-3 py-1.5 rounded-full shadow-sm font-extrabold leading-none", getBrandBg(cmsSettings.brandingColor).split(' ')[0])}>Schedule Tour</span>
+              <div className="flex items-center gap-2 sm:gap-4 text-[10px] text-zinc-400 font-bold shrink-0">
+                <span className="text-zinc-200 hidden sm:inline">Our Hubs</span>
+                <span className="hidden sm:inline">Workspaces</span>
+                <span className="hidden md:inline">Amenities</span>
+                <span className={cn("text-[9px] text-white px-3 py-1.5 rounded-full shadow-sm font-extrabold leading-none whitespace-nowrap", getBrandBg(cmsSettings.brandingColor).split(' ')[0])}>Schedule Tour</span>
               </div>
             </div>
 
             {/* Public Hero Mockup */}
-            <div className="py-12 text-center space-y-4 max-w-xl mx-auto">
+            <div className="py-6 sm:py-10 text-center space-y-4 max-w-xl mx-auto">
               <div className="inline-flex items-center gap-1.5 bg-zinc-900 border border-zinc-800 rounded-full py-1 px-3">
                 <Sparkles className={cn("w-3 h-3 shrink-0", getBrandText(cmsSettings.brandingColor))} />
                 <span className="text-[8px] font-extrabold tracking-wider text-zinc-350 uppercase">MULTI-CENTER EXPANSION PLATFORM</span>
@@ -249,7 +250,7 @@ export function WebsiteCMS() {
               <div className="border-t border-zinc-900/40 pt-6">
                 <h4 className="text-center font-black text-white text-xs uppercase tracking-widest pb-6">Flexible Workspace Pricing Suites</h4>
                 
-                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 pb-2">
                   {[
                     { title: 'Hot Desk Membership', price: cmsSettings.hotDeskPrice, desc: 'Cowork on unassigned collaborative seats with gigabit fiber link.' },
                     { title: 'Dedicated Desk', price: cmsSettings.dedicatedPrice, desc: 'Pristine assigned workstation layout featuring Kisi RFID door keys.' },
@@ -271,6 +272,7 @@ export function WebsiteCMS() {
                 </div>
               </div>
             )}
+            </div>
           </div>
         </div>
       </div>
