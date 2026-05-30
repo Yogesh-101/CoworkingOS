@@ -2,8 +2,9 @@ import { useState, useRef, useEffect } from 'react';
 import { useStore } from '@/store';
 import { subDays, format } from 'date-fns';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { ArrowUpRight, ArrowDownRight, Users, Building, Activity, DollarSign, ChevronDown, Calendar, Check } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Users, Building, Activity, DollarSign, ChevronDown, Calendar, Check, Brain, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { computeBIInsights, computeOccupancyForecast } from '@/lib/intelligence';
 
 function KPICard({ title, value, change, isPositive, icon: Icon, delay }: any) {
   return (
@@ -45,8 +46,18 @@ function KPICard({ title, value, change, isPositive, icon: Icon, delay }: any) {
 }
 
 export function DashboardOverview() {
-  const { kpi, branches, activeBranchId, notifications, invoices, leads } = useStore();
+  const { kpi, branches, activeBranchId, notifications, invoices, leads, visitors, tickets, renewals, setActiveTab } = useStore();
   const activeBranch = branches.find(b => b.id === activeBranchId);
+
+  const biInsights = computeBIInsights({
+    branch: activeBranch,
+    leads,
+    invoices,
+    visitors,
+    tickets,
+    renewals,
+  });
+  const occupancyForecast = computeOccupancyForecast(activeBranch, 7);
 
   // Compute dynamic curve data in real-time based on activeBranchId and selected timeRange
   const getDynamicChartData = () => {
@@ -207,6 +218,60 @@ export function DashboardOverview() {
           delay={0.4}
         />
       </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.45 }}
+        className="glass-panel rounded-3xl p-6 md:p-8 border-zinc-800"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-brand-500/10 rounded-xl">
+              <Brain className="w-5 h-5 text-brand-500" />
+            </div>
+            <div>
+              <h2 className="text-xl font-display font-bold text-zinc-100">Real-time Business Intelligence</h2>
+              <p className="text-xs text-zinc-500 flex items-center gap-1 mt-0.5">
+                <Sparkles className="w-3 h-3 text-brand-500" /> Live AI insights · updates with workspace data
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveTab('intelligence')}
+            className="text-xs font-bold px-4 py-2 rounded-xl bg-brand-500/10 text-brand-400 border border-brand-500/20 hover:bg-brand-500/20 transition-colors cursor-pointer self-start sm:self-auto"
+          >
+            Open Intelligence Hub →
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {biInsights.map((insight) => (
+            <div key={insight.id} className="bg-zinc-900/60 border border-zinc-805 rounded-2xl p-4">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500 mb-2">{insight.title}</p>
+              <p className="text-xl font-display font-bold text-zinc-100">{insight.value}</p>
+              <p className={`text-[10px] font-semibold mt-1.5 ${insight.positive ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {insight.delta}
+              </p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-6 pt-6 border-t border-zinc-805">
+          <p className="text-xs font-bold text-zinc-400 mb-3">7-day occupancy forecast</p>
+          <div className="flex items-end gap-1.5 h-16">
+            {occupancyForecast.map((point) => (
+              <div key={point.date} className="flex-1 flex flex-col items-center gap-1">
+                <div
+                  className="w-full bg-brand-500/80 rounded-t-md transition-all"
+                  style={{ height: `${Math.max(12, point.predicted * 0.55)}%` }}
+                  title={`${point.label}: ${point.predicted}%`}
+                />
+                <span className="text-[8px] text-zinc-600 font-mono truncate w-full text-center">{point.label.split(' ')[0]}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <motion.div 

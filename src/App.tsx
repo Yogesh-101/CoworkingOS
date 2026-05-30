@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Layout } from './components/layout/Layout';
 import { LandingPage } from './components/landing/LandingPage';
 import { RoleSelectScreen } from './components/auth/RoleSelectScreen';
+import { SupportChatbot } from './components/intelligence/SupportChatbot';
 import { useStore } from './store';
 
 const DashboardOverview = lazy(() =>
@@ -28,6 +29,9 @@ const WebsiteCMS = lazy(() =>
 );
 const ErpPage = lazy(() =>
   import('./components/dashboard/AdminPanel').then((m) => ({ default: m.ErpPage }))
+);
+const IntelligenceHub = lazy(() =>
+  import('./components/dashboard/IntelligenceHub').then((m) => ({ default: m.IntelligenceHub }))
 );
 const Settings = lazy(() =>
   import('./components/dashboard/Settings').then((m) => ({ default: m.Settings }))
@@ -73,6 +77,9 @@ function ActiveModule() {
     case 'erp':
       module = <ErpPage />;
       break;
+    case 'intelligence':
+      module = <IntelligenceHub />;
+      break;
     case 'settings':
       module = <Settings />;
       break;
@@ -88,6 +95,7 @@ function preloadAppModules() {
   void import('./components/dashboard/TeamChat');
   void import('./components/dashboard/WebsiteCMS');
   void import('./components/dashboard/AdminPanel');
+  void import('./components/dashboard/IntelligenceHub');
 }
 
 export default function App() {
@@ -97,17 +105,16 @@ export default function App() {
     if (view === 'app') preloadAppModules();
   }, [view]);
 
-  if (view === 'landing') {
-    return <LandingPage />;
-  }
-
-  if (view === 'role-select') {
-    return <RoleSelectScreen />;
-  }
-
   return (
-    <Layout>
-      <ActiveModule />
-    </Layout>
+    <>
+      {view === 'landing' && <LandingPage />}
+      {view === 'role-select' && <RoleSelectScreen />}
+      {view === 'app' && (
+        <Layout>
+          <ActiveModule />
+        </Layout>
+      )}
+      <SupportChatbot />
+    </>
   );
 }

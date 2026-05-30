@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Invoice, WorkspaceRenewal } from '@/types';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
+import { computeRenewalPredictions } from '@/lib/intelligence';
 
 export function Billing() {
   const { 
@@ -80,6 +81,9 @@ export function Billing() {
     const matchesStatus = statusFilter === 'all' || inv.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+
+  const renewalPredictions = computeRenewalPredictions(renewals, invoices);
+  const atRiskCount = renewalPredictions.filter((r) => r.risk !== 'low').length;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -678,10 +682,12 @@ export function Billing() {
             </div>
 
             <div className="space-y-3.5 overflow-y-auto max-h-[480px]">
-              {renewals.map((r) => (
+              {renewals.map((r) => {
+                const prediction = renewalPredictions.find((p) => p.renewalId === r.id);
+                return (
                 <div key={r.id} className="p-4 bg-zinc-950/45 border border-zinc-850 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs leading-none">
                   <div className="space-y-2">
-                    <div className="flex items-center gap-2 shadow-inner">
+                    <div className="flex items-center gap-2 shadow-inner flex-wrap">
                       <span className="text-[9px] font-mono font-bold text-zinc-550">LEASE ID: {r.id.toUpperCase()}</span>
                       <span className={cn(
                         "px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border leading-none",
@@ -691,10 +697,26 @@ export function Billing() {
                       )}>
                         {r.status}
                       </span>
+                      {prediction && r.status !== 'renewed' && (
+                        <span
+                          className={cn(
+                            'px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border leading-none',
+                            prediction.risk === 'low' && 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                            prediction.risk === 'medium' && 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                            prediction.risk === 'high' && 'bg-brand-500/10 text-brand-400 border-brand-500/20'
+                          )}
+                          title={prediction.recommendation}
+                        >
+                          AI {prediction.probability}% · {prediction.risk} risk
+                        </span>
+                      )}
                     </div>
 
                     <h4 className="font-extrabold text-zinc-150 text-sm capitalize">{r.clientName}</h4>
                     <p className="text-[11px] text-zinc-455 font-medium">{r.companyName} • {r.deskName}</p>
+                    {prediction && r.status !== 'renewed' && (
+                      <p className="text-[10px] text-zinc-500 font-medium">{prediction.recommendation}</p>
+                    )}
                   </div>
 
                   {/* Renew date spec info */}
@@ -734,16 +756,32 @@ export function Billing() {
                     </span>
                   )}
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           {/* Renewals metadata overview card */}
           <div className="bg-zinc-900 border border-zinc-805 rounded-3xl p-6 shadow-lg space-y-4">
-            <h4 className="font-extrabold text-zinc-200 text-sm">Automated Billing Sync</h4>
+            <h4 className="font-extrabold text-zinc-200 text-sm">AI Renewal Predictions</h4>
             <p className="text-xs text-zinc-400 leading-relaxed font-sans font-medium">
-              Processing a contract extension (Process Renew) automatically logs itemized paid receipts directly inside the active Invoices list. This keeps financial books accurate across centers dynamically.
+              {atRiskCount > 0
+                ? `${atRiskCount} contract(s) flagged at medium or high churn risk based on payment history, renewal window, and review status.`
+                : 'All active contracts show healthy renewal probability. Scores refresh when invoices or lease status change.'}
             </p>
+            <div className="space-y-2">
+              {renewalPredictions.slice(0, 4).map((p) => (
+                <div key={p.renewalId} className="flex items-center justify-between text-[10px] bg-zinc-950/60 p-3 rounded-xl border border-zinc-850">
+                  <span className="font-bold text-zinc-300 truncate">{p.clientName}</span>
+                  <span className={cn(
+                    'font-black uppercase shrink-0 ml-2',
+                    p.risk === 'low' ? 'text-emerald-400' : p.risk === 'medium' ? 'text-amber-400' : 'text-brand-400'
+                  )}>
+                    {p.probability}%
+                  </span>
+                </div>
+              ))}
+            </div>
 
             <div className="bg-zinc-950/60 p-4 rounded-xl border border-zinc-850/70 space-y-3 text-[10px] font-mono leading-relaxed text-zinc-500 text-left">
               <span className="text-[8px] font-bold text-zinc-450 block uppercase">AUTOMATED WORKSPACE HANDLERS:</span>

@@ -10,6 +10,7 @@ export type AppTab =
   | 'team-chat'
   | 'cms'
   | 'erp'
+  | 'intelligence'
   | 'settings';
 
 export const MODULE_LABELS: Record<Exclude<AppTab, 'settings'>, string> = {
@@ -22,6 +23,7 @@ export const MODULE_LABELS: Record<Exclude<AppTab, 'settings'>, string> = {
   'team-chat': 'Team Chat',
   cms: 'Public Web CMS',
   erp: 'ERP Admin',
+  intelligence: 'Intelligence Hub',
 };
 
 const ROLE_TAB_ACCESS: Record<UserRole, AppTab[]> = {
@@ -35,6 +37,7 @@ const ROLE_TAB_ACCESS: Record<UserRole, AppTab[]> = {
     'team-chat',
     'cms',
     'erp',
+    'intelligence',
     'settings',
   ],
   'Community Host': [
@@ -44,8 +47,9 @@ const ROLE_TAB_ACCESS: Record<UserRole, AppTab[]> = {
     'visitors',
     'helpdesk',
     'team-chat',
+    'intelligence',
   ],
-  Receptionist: ['dashboard', 'visitors', 'helpdesk'],
+  Receptionist: ['dashboard', 'visitors', 'helpdesk', 'intelligence'],
 };
 
 export function getAllowedTabs(role: UserRole): AppTab[] {

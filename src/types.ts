@@ -185,3 +185,10 @@ export interface UserSettings {
   emailDigest: 'daily' | 'weekly' | 'none';
   privacyMode: boolean;
 }
+
+export interface SupportMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  text: string;
+  time: string;
+}

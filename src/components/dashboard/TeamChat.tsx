@@ -20,6 +20,13 @@ import {
   CircleDot,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { generateGeminiText, isGeminiConfigured } from '@/lib/gemini';
+import {
+  buildTeamChatSystemPrompt,
+  pickTeamChatPersona,
+  snapshotFromStore,
+  teamChannelHistoryForGemini,
+} from '@/lib/ai-context';
 
 type ChannelId =
   | 'ops-downtown-hq'
@@ -95,14 +102,46 @@ const ONLINE_STAFF = [
   { name: 'Gilfoyle Stone', role: 'IT Support', status: 'away' },
 ];
 
+function buildFallbackTeamReplyAuthor(channelId: string, text: string) {
+  return pickTeamChatPersona(channelId, text);
+}
+
+function buildFallbackTeamReply(channelId: string, text: string): string {
+  const lower = text.toLowerCase();
+  if (channelId === 'billing-urgent' || lower.includes('invoice')) {
+    return 'Finance desk is on it. I will update the AR ledger within the hour.';
+  }
+  if (lower.includes('wifi') || lower.includes('network') || channelId === 'facility-alerts') {
+    return 'Running diagnostics on the gateway now. Will post ETA in this channel.';
+  }
+  if (lower.includes('visitor') || lower.includes('guest')) {
+    return 'Reception is briefed. Hot coffee and name badge are ready.';
+  }
+  return `Copied — logged for the ${channelId} thread.`;
+}
+
 export function TeamChat() {
-  const { chatMessages, addChatMessage, role, employees } = useStore();
+  const {
+    chatMessages,
+    addChatMessage,
+    role,
+    employees,
+    branches,
+    activeBranchId,
+    leads,
+    tickets,
+    renewals,
+    invoices,
+    visitors,
+  } = useStore();
   const [activeChannel, setActiveChannel] = useState<ChannelId>('ops-downtown-hq');
   const [inputText, setInputText] = useState('');
   const [markUrgent, setMarkUrgent] = useState(false);
   const [showTemplates, setShowTemplates] = useState(true);
+  const [aiReplying, setAiReplying] = useState(false);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
   const shouldStickToBottomRef = useRef(true);
+  const geminiEnabled = isGeminiConfigured();
 
   const adminName = useMemo(
     () => (typeof localStorage !== 'undefined' ? localStorage.getItem('co_admin_name') : null) || 'Admin User',
@@ -132,7 +171,7 @@ export function TeamChat() {
     shouldStickToBottomRef.current = distanceFromBottom < 80;
   };
 
-  const sendMessage = (text: string, urgent = false) => {
+  const sendMessage = async (text: string, urgent = false) => {
     if (!text.trim()) return;
     shouldStickToBottomRef.current = true;
     addChatMessage(activeChannel, text.trim(), adminName, role, {
@@ -141,33 +180,54 @@ export function TeamChat() {
     setInputText('');
     setMarkUrgent(false);
 
-    setTimeout(() => {
-      let replyAuthor = 'Monica Hall';
-      let replyRole = 'Community Host';
-      let replyMsg = `Copied — logged for the ${activeChannelMeta.label} thread.`;
+    const fallbackAuthor = buildFallbackTeamReplyAuthor(activeChannel, text);
+    let replyAuthor = fallbackAuthor.name;
+    let replyRole = fallbackAuthor.role;
+    let replyMsg = buildFallbackTeamReply(activeChannel, text);
 
-      const lower = text.toLowerCase();
-      if (activeChannel === 'billing-urgent' || lower.includes('invoice')) {
-        replyAuthor = 'Gavin Belson';
-        replyRole = 'Branch Manager';
-        replyMsg = 'Finance desk is on it. I will update the AR ledger within the hour.';
-      } else if (lower.includes('wifi') || lower.includes('network') || activeChannel === 'facility-alerts') {
-        replyAuthor = 'Jared Dunn';
-        replyRole = 'IT Support';
-        replyMsg = 'Running diagnostics on the gateway now. Will post ETA in this channel.';
-      } else if (lower.includes('visitor') || lower.includes('guest')) {
-        replyAuthor = 'Monica Hall';
-        replyRole = 'Community Host';
-        replyMsg = 'Reception is briefed. Hot coffee and name badge are ready.';
+    if (geminiEnabled) {
+      setAiReplying(true);
+      try {
+        const branch = branches.find((b) => b.id === activeBranchId) ?? branches[0];
+        const snapshot = snapshotFromStore({
+          branch,
+          leads,
+          tickets,
+          renewals,
+          invoices,
+          visitors,
+        });
+        const history = teamChannelHistoryForGemini(
+          chatMessages.filter((m) => m.channel === activeChannel),
+          adminName
+        );
+        replyMsg = await generateGeminiText({
+          systemInstruction: buildTeamChatSystemPrompt(
+            activeChannelMeta.label,
+            activeChannelMeta.desc,
+            fallbackAuthor.name,
+            fallbackAuthor.role,
+            snapshot
+          ),
+          userMessage: text.trim(),
+          history,
+          maxOutputTokens: 180,
+        });
+      } catch {
+        // Keep rule-based fallback
+      } finally {
+        setAiReplying(false);
       }
+    } else {
+      await new Promise((r) => setTimeout(r, 900));
+    }
 
-      addChatMessage(activeChannel, replyMsg, replyAuthor, replyRole);
-    }, 1100);
+    addChatMessage(activeChannel, replyMsg, replyAuthor, replyRole);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    sendMessage(inputText, markUrgent);
+    void sendMessage(inputText, markUrgent);
   };
 
   return (
@@ -317,7 +377,7 @@ export function TeamChat() {
                       <button
                         key={tpl.label}
                         type="button"
-                        onClick={() => sendMessage(tpl.text, tpl.priority === 'urgent')}
+                        onClick={() => void sendMessage(tpl.text, tpl.priority === 'urgent')}
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-900 border border-zinc-805 hover:border-brand-500/30 hover:text-brand-300 text-[10px] font-bold text-zinc-400 transition-all cursor-pointer"
                       >
                         <TplIcon className="w-3 h-3 shrink-0" />
@@ -387,6 +447,11 @@ export function TeamChat() {
                 </div>
               );
             })}
+            {aiReplying && (
+              <div className="mr-auto max-w-[88%] rounded-2xl p-3.5 text-xs font-semibold text-zinc-500 bg-zinc-950 border border-zinc-805/60">
+                Gemini is drafting a team reply…
+              </div>
+            )}
           </div>
 
           <form
@@ -397,11 +462,13 @@ export function TeamChat() {
               <button
                 type="button"
                 onClick={() => setMarkUrgent((v) => !v)}
+                disabled={aiReplying}
                 className={cn(
                   'px-2.5 py-1 rounded-lg text-[9px] font-black uppercase border transition-all cursor-pointer shrink-0',
                   markUrgent
                     ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                    : 'bg-zinc-900 text-zinc-550 border-zinc-805 hover:text-zinc-300'
+                    : 'bg-zinc-900 text-zinc-550 border-zinc-805 hover:text-zinc-300',
+                  aiReplying && 'opacity-50 cursor-not-allowed'
                 )}
               >
                 Urgent
@@ -411,11 +478,13 @@ export function TeamChat() {
                 placeholder={`Message #${activeChannelMeta.label}…`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
-                className="flex-1 bg-zinc-950 border border-zinc-805 rounded-full py-2.5 px-5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/30 font-semibold min-w-0"
+                disabled={aiReplying}
+                className="flex-1 bg-zinc-950 border border-zinc-805 rounded-full py-2.5 px-5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/30 font-semibold min-w-0 disabled:opacity-60"
               />
               <button
                 type="submit"
-                className="w-10 h-10 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center cursor-pointer shadow-md active:scale-95 transition-all shrink-0"
+                disabled={aiReplying || !inputText.trim()}
+                className="w-10 h-10 rounded-full bg-brand-500 hover:bg-brand-600 text-white flex items-center justify-center cursor-pointer shadow-md active:scale-95 transition-all shrink-0 disabled:opacity-50"
               >
                 <Send className="w-4 h-4" />
               </button>

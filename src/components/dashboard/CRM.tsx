@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Lead, ClientOnboarding, Proposal } from '@/types';
+import { computeLeadScores, getLeadScoreForId } from '@/lib/intelligence';
 
 const STAGES = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'] as const;
 
@@ -67,6 +68,8 @@ export function CRM() {
 
   // Calculate stats
   const totalPipelineVal = filteredLeads.reduce((acc, l) => acc + l.value, 0);
+  const leadScores = computeLeadScores(leads);
+  const hotLeadCount = leadScores.filter((s) => s.tier === 'hot').length;
 
   const handleSubmitLead = (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,6 +174,11 @@ export function CRM() {
                 <span className="text-xs font-mono font-bold text-brand-500 bg-brand-500/10 px-2.5 py-0.5 rounded-full">
                   Total ARR Pip: ${totalPipelineVal.toLocaleString()}
                 </span>
+                {hotLeadCount > 0 && (
+                  <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
+                    {hotLeadCount} AI hot lead{hotLeadCount !== 1 ? 's' : ''}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -227,7 +235,9 @@ export function CRM() {
                         <span className="text-xs font-semibold">Column empty</span>
                       </div>
                     ) : (
-                      leadsInStage.map((lead, idx) => (
+                      leadsInStage.map((lead, idx) => {
+                        const score = getLeadScoreForId(leads, lead.id);
+                        return (
                         <motion.div
                           key={lead.id}
                           initial={{ opacity: 0, y: 12 }}
@@ -238,6 +248,20 @@ export function CRM() {
                         >
                           <div className="flex justify-between items-start mb-1">
                             <h4 className="font-bold text-zinc-100 group-hover:text-white transition-colors text-sm">{lead.name}</h4>
+                            <div className="flex items-center gap-1.5">
+                              {score && lead.stage !== 'won' && lead.stage !== 'lost' && (
+                                <span
+                                  className={cn(
+                                    'text-[9px] font-black uppercase px-2 py-0.5 rounded-md',
+                                    score.tier === 'hot' && 'bg-brand-500/15 text-brand-400',
+                                    score.tier === 'warm' && 'bg-amber-500/15 text-amber-400',
+                                    score.tier === 'cold' && 'bg-zinc-800 text-zinc-500'
+                                  )}
+                                  title={score.factors.join(', ')}
+                                >
+                                  {score.score}
+                                </span>
+                              )}
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                               <button 
                                 onClick={() => deleteLead(lead.id)}
@@ -246,6 +270,7 @@ export function CRM() {
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
+                            </div>
                             </div>
                           </div>
                           <p className="text-xs font-medium text-zinc-400 mb-2">{lead.company}</p>
@@ -283,7 +308,8 @@ export function CRM() {
                             </div>
                           </div>
                         </motion.div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>

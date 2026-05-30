@@ -3,7 +3,7 @@ import { useStore } from '@/store';
 import { cn } from '@/lib/utils';
 import { 
   LayoutDashboard, Map, Users, FileText, Settings, UserCheck, 
-  MessageSquare, ClipboardList, Laptop, ShieldCheck, Lock, LogOut
+  MessageSquare, ClipboardList, Laptop, ShieldCheck, Lock, LogOut, Brain
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
@@ -15,6 +15,7 @@ const navItems = [
   { id: 'crm', label: 'CRM & Leads', icon: Users },
   { id: 'visitors', label: 'Guest Arrivals', icon: UserCheck },
   { id: 'helpdesk', label: 'Helpdesk & Ops', icon: ClipboardList },
+  { id: 'intelligence', label: 'Intelligence Hub', icon: Brain },
   { id: 'billing', label: 'Finance & Billing', icon: FileText },
   { id: 'team-chat', label: 'Team Chat', icon: MessageSquare },
   { id: 'cms', label: 'Public Web CMS', icon: Laptop },

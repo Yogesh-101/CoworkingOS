@@ -3,7 +3,7 @@ import {
   Branch, Desk, Lead, Invoice, KPIData, 
   Visitor, ClientOnboarding, Proposal, Employee, 
   Ticket, InternalTask, ChatMessage, CMSSettings, 
-  IntegrationSetting, WorkspaceRenewal, UserSettings 
+  IntegrationSetting, WorkspaceRenewal, UserSettings, SupportMessage 
 } from './types';
 import { subDays, format } from 'date-fns';
 import type { AppTab, UserRole } from './lib/rbac';
@@ -78,6 +78,9 @@ interface AppState {
     senderRole: string,
     options?: { priority?: ChatMessage['priority'] }
   ) => void;
+
+  supportMessages: SupportMessage[];
+  addSupportMessage: (role: SupportMessage['role'], text: string) => void;
   
   // Website CMS Settings
   cmsSettings: CMSSettings;
@@ -248,6 +251,15 @@ const mockChatMessages: ChatMessage[] = [
   { id: 'msg-6', channel: 'member-shoutouts', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Shoutout to Stellar Tech for hitting 100% onboarding checklist this week!', time: 'Yesterday' },
 ];
 
+const mockSupportMessages: SupportMessage[] = [
+  {
+    id: 'sup-1',
+    role: 'assistant',
+    text: "Hi! I'm CoworkingOS Assist. Ask about occupancy forecasts, lead scores, renewals, visitors, tickets, or staff productivity — all answers use live workspace data.",
+    time: format(new Date(), 'hh:mm a'),
+  },
+];
+
 // CMS Live Customizable State
 const initialCMS: CMSSettings = {
   heroTitle: 'The Enterprise Workspace Ecosystem',
@@ -310,6 +322,7 @@ export const useStore = create<AppState>((set) => ({
   tickets: mockTickets,
   tasks: mockTasks,
   chatMessages: mockChatMessages,
+  supportMessages: mockSupportMessages,
   cmsSettings: initialCMS,
   integrations: mockIntegrations,
   renewals: mockRenewals,
@@ -627,7 +640,19 @@ export const useStore = create<AppState>((set) => ({
       },
     ],
   })),
-  
+
+  addSupportMessage: (role, text) => set((state) => ({
+    supportMessages: [
+      ...state.supportMessages,
+      {
+        id: `sup-${Date.now()}`,
+        role,
+        text,
+        time: format(new Date(), 'hh:mm a'),
+      },
+    ],
+  })),
+
   // CMS Updater
   updateCMSSettings: (settings) => set((state) => ({
     cmsSettings: { ...state.cmsSettings, ...settings }
