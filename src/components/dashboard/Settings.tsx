@@ -1,5 +1,5 @@
 import { useStore } from '@/store';
-import { Settings as SettingsIcon, Bell, Moon, Sun, Shield, Mail } from 'lucide-react';
+import { Settings as SettingsIcon, Bell, Shield, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export function Settings() {
@@ -13,23 +13,6 @@ export function Settings() {
       </div>
 
       <div className="space-y-6">
-        
-        {/* Theme Settings */}
-        <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-800">
-          <div className="flex items-center justify-between mb-4">
-             <div className="flex items-center gap-3">
-               {userSettings.theme === 'dark' ? <Moon className="w-5 h-5 text-zinc-400" /> : <Sun className="w-5 h-5 text-amber-500" />}
-               <h3 className="font-bold text-white">Appearance</h3>
-             </div>
-             <button
-               onClick={() => updateUserSettings({ theme: userSettings.theme === 'dark' ? 'light' : 'dark' })}
-               className={cn("px-4 py-1.5 rounded-full text-xs font-bold transition-all", userSettings.theme === 'dark' ? "bg-zinc-800 text-zinc-300" : "bg-amber-100 text-amber-800")}
-             >
-               {userSettings.theme === 'dark' ? 'Dark Mode' : 'Light Mode'}
-             </button>
-          </div>
-          <p className="text-sm text-zinc-500">Toggle between light and dark interface themes for the CoworkingOS dashboard.</p>
-        </div>
 
         {/* Notifications */}
         <div className="bg-zinc-950 p-6 rounded-2xl border border-zinc-800">
