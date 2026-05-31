@@ -15,7 +15,7 @@ Coworking spaces running multiple branches often rely on spreadsheets, WhatsApp,
 - **Multi-location control** - branch switcher, per-branch metrics, and role-based access  
 - **Public-facing CMS** - live preview of marketing site content (hero, pricing, branding)
 
-This repository is a **production-ready frontend demo**: all business data lives in client-side state (**Zustand**) with realistic seed data. No backend or API keys are required to run it locally. It is suitable for demos, UX evaluation, and as a foundation for wiring a real API later.
+This repository ships a **production-ready operator console** with optional **SereniBase** persistence ([backend-only stack](BACKEND.md)) or a **standalone demo** (in-memory Zustand). See [BACKEND.md](BACKEND.md) for Docker setup with PostgreSQL + SereniBase REST API.
 
 ### Who it is for
 
@@ -51,7 +51,9 @@ Landing Page  →  Enter Platform  →  App Shell (Sidebar + Header)
 - **Node.js** 18 or newer  
 - **npm** (comes with Node.js)
 
-No database, Docker, or environment variables are required for the default demo.
+**Demo mode:** no database or Docker required.
+
+**Production mode:** Docker + `VITE_USE_SERENIBASE=true` — see [BACKEND.md](BACKEND.md).
 
 ### 1. Clone and install
 

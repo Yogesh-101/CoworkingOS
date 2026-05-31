@@ -1,15 +1,24 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Bot, X, Send, Sparkles, Minimize2 } from 'lucide-react';
+import { Bot, X, Send, Minimize2, Mic, MicOff } from 'lucide-react';
 import { useStore } from '@/store';
 import { cn } from '@/lib/utils';
 import { generateChatbotReply, computeLeadScores, computeRenewalPredictions } from '@/lib/intelligence';
 import { generateGeminiText, isGeminiConfigured } from '@/lib/gemini';
 import { buildAssistSystemPrompt, chatHistoryForGemini, snapshotFromStore } from '@/lib/ai-context';
+import {
+  navigationReply,
+  parseAssistNavigation,
+  platformAccessReply,
+  wantsPlatformAccess,
+} from '@/lib/assist-navigation';
+import { isTabAllowed } from '@/lib/rbac';
+import { useAssistSpeech } from '@/hooks/useAssistSpeech';
 
 export function SupportChatbot() {
   const {
     view,
+    role,
     branches,
     activeBranchId,
     leads,
@@ -19,6 +28,8 @@ export function SupportChatbot() {
     visitors,
     supportMessages,
     addSupportMessage,
+    setActiveTab,
+    requestPlatformAccess,
   } = useStore();
 
   const [open, setOpen] = useState(false);
@@ -39,56 +50,97 @@ export function SupportChatbot() {
     if (open) endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [supportMessages, open, typing]);
 
-  const send = async (text: string) => {
-    if (!text.trim() || !branch) return;
-    const trimmed = text.trim();
-    addSupportMessage('user', trimmed);
-    setInput('');
-    setTyping(true);
+  const send = useCallback(
+    async (text: string) => {
+      if (!text.trim() || !branch) return;
+      const trimmed = text.trim();
+      addSupportMessage('user', trimmed);
+      setInput('');
+      setTyping(true);
 
-    const fallbackCtx = {
-      branchName: branch.name,
-      occupancy: branch.occupancyRate,
+      const fallbackCtx = {
+        branchName: branch.name,
+        occupancy: branch.occupancyRate,
+        hotLeads,
+        openTickets,
+        atRiskRenewals,
+        checkedInVisitors,
+        isPublic: view !== 'app',
+      };
+
+      let reply = generateChatbotReply(trimmed, fallbackCtx);
+      let handledNav = false;
+
+      if (view !== 'app' && wantsPlatformAccess(trimmed)) {
+        requestPlatformAccess();
+        reply = platformAccessReply();
+        handledNav = true;
+      } else if (view === 'app' && role) {
+        const navTab = parseAssistNavigation(trimmed);
+        if (navTab && isTabAllowed(role, navTab)) {
+          setActiveTab(navTab);
+          reply = navigationReply(navTab);
+          handledNav = true;
+        }
+      }
+
+      if (!handledNav && geminiEnabled) {
+        try {
+          const snapshot = snapshotFromStore({
+            branch,
+            leads,
+            tickets,
+            renewals,
+            invoices,
+            visitors,
+            isPublic: view !== 'app',
+          });
+          const history = chatHistoryForGemini(
+            supportMessages.map((m) => ({ role: m.role, text: m.text }))
+          );
+          reply = await generateGeminiText({
+            systemInstruction: buildAssistSystemPrompt(snapshot),
+            userMessage: trimmed,
+            history,
+          });
+        } catch {
+          // Keep rule-based fallback on API errors
+        }
+      }
+
+      addSupportMessage('assistant', reply);
+      setTyping(false);
+    },
+    [
+      branch,
+      addSupportMessage,
       hotLeads,
       openTickets,
       atRiskRenewals,
       checkedInVisitors,
-      isPublic: view !== 'app',
-    };
+      view,
+      role,
+      requestPlatformAccess,
+      setActiveTab,
+      geminiEnabled,
+      leads,
+      tickets,
+      renewals,
+      invoices,
+      visitors,
+      supportMessages,
+    ]
+  );
 
-    let reply = generateChatbotReply(trimmed, fallbackCtx);
+  const { listening, supported, toggle: toggleMic } = useAssistSpeech((transcript) => {
+    setInput(transcript);
+    void send(transcript);
+  });
 
-    if (geminiEnabled) {
-      try {
-        const snapshot = snapshotFromStore({
-          branch,
-          leads,
-          tickets,
-          renewals,
-          invoices,
-          visitors,
-          isPublic: view !== 'app',
-        });
-        const history = chatHistoryForGemini(
-          supportMessages.map((m) => ({ role: m.role, text: m.text }))
-        );
-        reply = await generateGeminiText({
-          systemInstruction: buildAssistSystemPrompt(snapshot),
-          userMessage: trimmed,
-          history,
-        });
-      } catch {
-        // Keep rule-based fallback on API errors
-      }
-    }
-
-    addSupportMessage('assistant', reply);
-    setTyping(false);
-  };
-
-  const quickPrompts = view === 'app'
-    ? ['Occupancy forecast?', 'Hot leads today?', 'Renewals at risk?', 'Visitors on-site?']
-    : ['What is CoworkingOS?', 'Pricing plans?', 'Occupancy forecast?', 'How do I sign in?'];
+  const quickPrompts =
+    view === 'app'
+      ? ['Open CRM', 'Go to Floor Map', 'Occupancy forecast?', 'Renewals at risk?']
+      : ['What is CoworkingOS?', 'Pricing plans?', 'Enter platform', 'Occupancy forecast?'];
 
   const anchorClass = view === 'app' ? 'bottom-20 md:bottom-6' : 'bottom-6';
 
@@ -110,13 +162,7 @@ export function SupportChatbot() {
                 <div className="w-8 h-8 rounded-xl bg-brand-500/15 flex items-center justify-center">
                   <Bot className="w-4 h-4 text-brand-500" />
                 </div>
-                <div>
-                  <span className="text-xs font-black text-white block">CoworkingOS Assist</span>
-                  <span className="text-[9px] text-emerald-400 font-bold flex items-center gap-1">
-                    <Sparkles className="w-2.5 h-2.5" />
-                    {geminiEnabled ? 'Gemini · Live data' : 'AI · Live data'}
-                  </span>
-                </div>
+                <span className="text-xs font-black text-white">CoworkingOS Assist</span>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -154,7 +200,7 @@ export function SupportChatbot() {
               ))}
               {typing && (
                 <div className="mr-auto bg-zinc-900 border border-zinc-805 rounded-2xl px-4 py-3 text-zinc-500 text-xs">
-                  {geminiEnabled ? 'Gemini is thinking…' : 'Analyzing workspace data…'}
+                  Thinking…
                 </div>
               )}
               <div ref={endRef} />
@@ -184,13 +230,33 @@ export function SupportChatbot() {
                 <input
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask about ops, leads, renewals…"
-                  disabled={typing}
+                  placeholder={
+                    supported
+                      ? 'Ask or say "Open CRM", "Go to billing"…'
+                      : 'Ask about ops, leads, renewals…'
+                  }
+                  disabled={typing || listening}
                   className="flex-1 bg-zinc-900 border border-zinc-805 rounded-full px-4 py-2 text-xs text-zinc-200 focus:outline-none min-w-0 disabled:opacity-60"
                 />
+                {supported && (
+                  <button
+                    type="button"
+                    onClick={toggleMic}
+                    disabled={typing}
+                    aria-label={listening ? 'Stop listening' : 'Voice input'}
+                    className={cn(
+                      'w-9 h-9 rounded-full flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50 transition-colors',
+                      listening
+                        ? 'bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse'
+                        : 'bg-zinc-900 border border-zinc-805 text-zinc-400 hover:text-brand-400'
+                    )}
+                  >
+                    {listening ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                )}
                 <button
                   type="submit"
-                  disabled={typing || !input.trim()}
+                  disabled={typing || listening || !input.trim()}
                   className="w-9 h-9 rounded-full bg-brand-500 text-white flex items-center justify-center shrink-0 cursor-pointer disabled:opacity-50"
                 >
                   <Send className="w-4 h-4" />

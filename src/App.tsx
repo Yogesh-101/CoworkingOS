@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Layout } from './components/layout/Layout';
 import { LandingPage } from './components/landing/LandingPage';
 import { RoleSelectScreen } from './components/auth/RoleSelectScreen';
+import { LoginScreen } from './components/auth/LoginScreen';
 import { SupportChatbot } from './components/intelligence/SupportChatbot';
 import { useStore } from './store';
 
@@ -109,6 +110,7 @@ export default function App() {
     <>
       {view === 'landing' && <LandingPage />}
       {view === 'role-select' && <RoleSelectScreen />}
+      {view === 'login' && <LoginScreen />}
       {view === 'app' && (
         <Layout>
           <ActiveModule />

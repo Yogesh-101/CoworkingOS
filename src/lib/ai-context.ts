@@ -34,12 +34,14 @@ Current workspace (${ctx.branchName}):
   if (ctx.isPublic) {
     return `${base}
 
-The user is on the public marketing site (not signed in). Explain CoworkingOS features, pricing (hot desk ~$399/mo, dedicated ~$790/mo, meeting rooms ~$1200/mo), and guide them to use "Enter Platform" or "Explore Demo" to sign in. You may cite the demo stats above as sample data.`;
+The user is on the public marketing site (not signed in). Explain CoworkingOS features, pricing (hot desk ~$399/mo, dedicated ~$790/mo, meeting rooms ~$1200/mo), and guide them to use "Enter Platform" or "Explore Demo" to sign in. If they ask to sign in or enter the app, confirm you are taking them to role selection. You may cite the demo stats above as sample data.`;
   }
 
   return `${base}
 
-The user is signed into the CoworkingOS app. Mention relevant modules: Intelligence Hub, CRM, Finance & Billing, Guest Arrivals, Helpdesk, Team Chat, Floor Map.`;
+The user is signed into the CoworkingOS app. You can answer questions about modules and live data.
+When the user asks to open or go to a module (e.g. "Open CRM", "Go to billing", "Show floor map"), confirm briefly which screen you are opening — navigation is handled automatically.
+Available modules: Intelligence Hub, CRM & Leads, Finance & Billing, Guest Arrivals, Helpdesk & Ops, Team Chat, Floor Map, Dashboard, Public Web CMS, ERP Admin, Settings.`;
 }
 
 export function buildTeamChatSystemPrompt(

@@ -7,6 +7,19 @@ import {
 } from './types';
 import { subDays, format } from 'date-fns';
 import type { AppTab, UserRole } from './lib/rbac';
+import { USE_SERENIBASE } from './lib/api/config';
+import {
+  extractWorkspacePayload,
+  hydrateFromApi,
+  schedulePersist,
+  setHydrating,
+} from './lib/api/workspace-sync';
+import {
+  login as apiLogin,
+  clearSession,
+  getStoredUser,
+  type AuthUser,
+} from './lib/api/client';
 
 export interface Notification {
   id: string;
@@ -17,12 +30,17 @@ export interface Notification {
   read: boolean;
 }
 
-interface AppState {
-  view: 'landing' | 'role-select' | 'app';
+export interface AppState {
+  view: 'landing' | 'role-select' | 'login' | 'app';
   setView: (view: AppState['view']) => void;
   requestPlatformAccess: () => void;
   enterAppWithRole: (role: UserRole) => void;
+  loginWithCredentials: (email: string, password: string) => Promise<void>;
+  logout: () => void;
   openRoleSelect: () => void;
+  apiReady: boolean;
+  apiError: string | null;
+  authUser: AuthUser | null;
   
   activeTab: AppTab;
   setActiveTab: (tab: AppTab) => void;
@@ -255,7 +273,7 @@ const mockSupportMessages: SupportMessage[] = [
   {
     id: 'sup-1',
     role: 'assistant',
-    text: "Hi! I'm CoworkingOS Assist. Ask about occupancy forecasts, lead scores, renewals, visitors, tickets, or staff productivity — all answers use live workspace data.",
+    text: "Hi! I'm CoworkingOS Assist. Ask about occupancy, leads, or renewals — or say \"Open CRM\" / \"Go to billing\" to navigate. Tap the mic for voice.",
     time: format(new Date(), 'hh:mm a'),
   },
 ];
@@ -287,15 +305,66 @@ const mockRenewals: WorkspaceRenewal[] = [
   { id: 'ren-3', clientName: 'Wayne Enterprises', companyName: 'Wayne Tech', branchId: 'b2', deskName: 'Director Office 1', monthlyFee: 4200, renewalDate: 'Jul 01, 2026', paymentCycle: 'Monthly', status: 'active' }
 ];
 
-export const useStore = create<AppState>((set) => ({
+export const useStore = create<AppState>((set, get) => ({
   view: 'landing',
+  apiReady: !USE_SERENIBASE,
+  apiError: null,
+  authUser: getStoredUser(),
   setView: (view) => set({ view }),
-  requestPlatformAccess: () => set({ view: 'role-select' }),
+  requestPlatformAccess: () =>
+    set({ view: USE_SERENIBASE ? 'login' : 'role-select' }),
   enterAppWithRole: (role) => {
     localStorage.setItem('co_admin_role', role);
     set({ role, view: 'app', activeTab: 'dashboard' });
+    if (USE_SERENIBASE) {
+      setHydrating(true);
+      hydrateFromApi()
+        .then((data) => {
+          set({ ...data, apiReady: true, apiError: null } as Partial<AppState>);
+        })
+        .catch((err) => {
+          set({
+            apiError: err instanceof Error ? err.message : 'Failed to load workspace',
+          });
+        })
+        .finally(() => setHydrating(false));
+    }
   },
-  openRoleSelect: () => set({ view: 'role-select' }),
+  loginWithCredentials: async (email, password) => {
+    const { user } = await apiLogin(email, password);
+    localStorage.setItem('co_admin_role', user.role);
+    localStorage.setItem('co_admin_name', user.name);
+    set({
+      authUser: user,
+      role: user.role,
+      view: 'app',
+      activeTab: 'dashboard',
+      apiError: null,
+    });
+    setHydrating(true);
+    try {
+      const data = await hydrateFromApi();
+      set({ ...data, apiReady: true, authUser: user } as Partial<AppState>);
+    } catch (err) {
+      set({
+        apiReady: false,
+        apiError: err instanceof Error ? err.message : 'Failed to load workspace',
+      });
+      throw err;
+    } finally {
+      setHydrating(false);
+    }
+  },
+  logout: () => {
+    clearSession();
+    set({
+      authUser: null,
+      view: 'landing',
+      apiReady: !USE_SERENIBASE,
+      apiError: null,
+    });
+  },
+  openRoleSelect: () => set({ view: USE_SERENIBASE ? 'login' : 'role-select' }),
   
   activeTab: 'dashboard',
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -1023,6 +1092,13 @@ export const useStore = create<AppState>((set) => ({
     userSettings: { ...state.userSettings, ...settings }
   })),
 }));
+
+if (USE_SERENIBASE) {
+  useStore.subscribe((state) => {
+    if (state.view !== 'app' || !state.apiReady) return;
+    schedulePersist(() => extractWorkspacePayload(useStore.getState() as unknown as Record<string, unknown>));
+  });
+}
 
 function selectedActivityLogText(type: Desk['type']) {
   switch (type) {
