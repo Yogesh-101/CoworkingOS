@@ -1,13 +1,9 @@
+import { generateAiText, checkApiHealth } from '@/lib/api/client';
+
 const GEMINI_MODEL = 'gemini-2.0-flash';
-const API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 export function isGeminiConfigured(): boolean {
-  return Boolean(import.meta.env.VITE_GEMINI_API_KEY?.trim());
-}
-
-export function getGeminiApiKey(): string | undefined {
-  const key = import.meta.env.VITE_GEMINI_API_KEY?.trim();
-  return key || undefined;
+  return true;
 }
 
 interface GeminiContent {
@@ -22,26 +18,27 @@ export async function generateGeminiText(options: {
   maxOutputTokens?: number;
   temperature?: number;
 }): Promise<string> {
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    throw new Error('VITE_GEMINI_API_KEY is not configured');
+  const apiUp = await checkApiHealth();
+  if (apiUp) {
+    return generateAiText(options);
   }
 
-  const contents: GeminiContent[] = [
-    ...(options.history ?? []),
-    { role: 'user', parts: [{ text: options.userMessage }] },
-  ];
+  const clientKey = import.meta.env.VITE_GEMINI_API_KEY?.trim();
+  if (!clientKey) {
+    throw new Error('AI service unavailable');
+  }
 
   const response = await fetch(
-    `${API_BASE}/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(apiKey)}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${encodeURIComponent(clientKey)}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        systemInstruction: {
-          parts: [{ text: options.systemInstruction }],
-        },
-        contents,
+        systemInstruction: { parts: [{ text: options.systemInstruction }] },
+        contents: [
+          ...(options.history ?? []),
+          { role: 'user', parts: [{ text: options.userMessage }] },
+        ],
         generationConfig: {
           temperature: options.temperature ?? 0.65,
           maxOutputTokens: options.maxOutputTokens ?? 512,
@@ -50,18 +47,11 @@ export async function generateGeminiText(options: {
     }
   );
 
-  if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(`Gemini API error (${response.status}): ${detail.slice(0, 200)}`);
-  }
-
+  if (!response.ok) throw new Error('Gemini API error');
   const data = (await response.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] } }[];
   };
-
   const text = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('').trim();
-  if (!text) {
-    throw new Error('Gemini returned an empty response');
-  }
+  if (!text) throw new Error('Empty AI response');
   return text;
 }

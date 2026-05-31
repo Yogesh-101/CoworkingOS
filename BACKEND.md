@@ -1,78 +1,47 @@
-# CoworkingOS + SereniBase Backend
+# CoworkingOS Backend
 
-Production stack using [SereniBase](https://github.com/aptlogica/sereni-base) **backend only** (REST API + PostgreSQL), plus a minimal JWT provider and CoworkingOS BFF.
+Express + SQLite API for persistent workspace data.
 
-## Architecture
+## Stack
 
-```
-CoworkingOS (React)  →  Coworking API (:3001)  →  SereniBase REST (:8080)
-                              ↓
-                        JWT provider (:8081)
-                              ↓
-                        PostgreSQL (:5432)
-```
-
-- **SereniBase** stores the full workspace snapshot in a dedicated table (`coworking_snapshot`).
-- **Coworking API** bootstraps workspace/base/table on first run and exposes `/api/v1/auth/login` and `/api/v1/workspace`.
-- **JWT provider** implements the auth contract SereniBase expects (not included in upstream `docker-compose.yaml` alone).
+- **Express 4** — REST API
+- **SQLite** (`better-sqlite3`) — file database at `backend/data/coworkingos.db`
+- **Gemini** — server-side AI proxy (`GEMINI_API_KEY`, not exposed to browser)
 
 ## Quick start
 
 ```bash
-# 1. Start backend
-chmod +x scripts/setup-backend.sh
-./scripts/setup-backend.sh
+# From repo root — runs frontend (:3000) and API (:4000) together
+npm run dev
 
-# 2. Enable API mode for frontend
-echo 'VITE_USE_SERENIBASE=true' >> .env.local
-echo 'VITE_API_URL=' >> .env.local
-
-# 3. Run frontend
-npm install
+# Or run API only
+cd backend && cp .env.example .env   # add GEMINI_API_KEY
 npm run dev
 ```
 
-Sign in at **http://localhost:3000** with:
+## API
 
-| Field | Default |
-|-------|---------|
-| Email | `admin@example.com` |
-| Password | `Admin@123` |
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Health check |
+| GET | `/api/bootstrap` | Full workspace snapshot |
+| POST | `/api/sync` | Replace workspace state (used by frontend debounced persist) |
+| POST | `/api/mutate` | Single action mutation `{ action, payload, context }` |
+| POST | `/api/ai/generate` | Gemini proxy for Assist & Team Chat |
+| POST | `/api/seed/reset` | Reset DB to demo seed data |
 
-(Set via `OWNER_EMAIL` / `OWNER_PASSWORD` in `.env` for Docker.)
+## Environment
 
-## Services
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `4000` | API port |
+| `DATABASE_PATH` | `./data/coworkingos.db` | SQLite file |
+| `CORS_ORIGIN` | `http://localhost:3000` | Allowed frontend origin |
+| `GEMINI_API_KEY` | — | Google Gemini API key (server only) |
 
-| Service | Port | URL |
-|---------|------|-----|
-| Coworking API | 3001 | http://localhost:3001/health |
-| SereniBase REST | 8080 | http://localhost:8080/api/v1/health |
-| JWT provider | 8081 | http://localhost:8081/health |
-| PostgreSQL | 5432 | localhost:5432 |
+## Frontend integration
 
-## Commands
-
-```bash
-# Start
-docker compose up -d
-
-# Logs
-docker compose logs -f coworking-api serenibase-rest
-
-# Stop (keep data)
-docker compose down
-
-# Reset all data
-docker compose down -v
-```
-
-## Demo vs production mode
-
-| Mode | Env | Behavior |
-|------|-----|----------|
-| Demo | `VITE_USE_SERENIBASE` unset | In-memory Zustand seed, role picker |
-| Production | `VITE_USE_SERENIBASE=true` | SereniBase login, persisted workspace |
-
-## Reference
-
-SereniBase setup guide: [SETUP_COMPLETE_GUIDE.md](https://github.com/aptlogica/sereni-base/blob/develop/build/SETUP_COMPLETE_GUIDE.md)
+- Vite proxies `/api` → `http://localhost:4000` in dev
+- On sign-in, frontend loads `/api/bootstrap` into Zustand
+- Changes debounce-sync to `/api/sync` (~400ms)
+- Set `VITE_USE_API=false` in `.env.local` to use in-memory mocks only

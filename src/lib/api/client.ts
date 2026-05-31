@@ -1,101 +1,110 @@
-import { API_BASE_URL } from './config';
-import type { UserRole } from '@/lib/rbac';
+import type {
+  Branch,
+  Lead,
+  Invoice,
+  KPIData,
+  Visitor,
+  ClientOnboarding,
+  Proposal,
+  Employee,
+  Ticket,
+  InternalTask,
+  ChatMessage,
+  CMSSettings,
+  IntegrationSetting,
+  WorkspaceRenewal,
+  UserSettings,
+  SupportMessage,
+} from '@/types';
+import type { Notification } from '@/store';
 
-export interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  role: UserRole;
+export interface BootstrapPayload {
+  branches: Branch[];
+  leads: Lead[];
+  invoices: Invoice[];
+  kpi: KPIData;
+  notifications: Notification[];
+  visitors: Visitor[];
+  onboardings: ClientOnboarding[];
+  proposals: Proposal[];
+  employees: Employee[];
+  tickets: Ticket[];
+  tasks: InternalTask[];
+  chatMessages: ChatMessage[];
+  supportMessages: SupportMessage[];
+  cmsSettings: CMSSettings;
+  integrations: IntegrationSetting[];
+  renewals: WorkspaceRenewal[];
+  userSettings: UserSettings;
 }
 
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-}
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
-const TOKEN_KEY = 'co_access_token';
-const REFRESH_KEY = 'co_refresh_token';
-const USER_KEY = 'co_user';
-
-export function getStoredToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function getStoredUser(): AuthUser | null {
-  const raw = localStorage.getItem(USER_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as AuthUser;
-  } catch {
-    return null;
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
+    ...init,
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `API ${res.status}`);
   }
+  return res.json() as Promise<T>;
 }
 
-export function storeSession(user: AuthUser, token: AuthTokens) {
-  localStorage.setItem(TOKEN_KEY, token.access_token);
-  localStorage.setItem(REFRESH_KEY, token.refresh_token);
-  localStorage.setItem(USER_KEY, JSON.stringify(user));
+export async function fetchBootstrap(): Promise<BootstrapPayload> {
+  return request<BootstrapPayload>('/bootstrap');
 }
 
-export function clearSession() {
-  localStorage.removeItem(TOKEN_KEY);
-  localStorage.removeItem(REFRESH_KEY);
-  localStorage.removeItem(USER_KEY);
-}
-
-async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = getStoredToken();
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string>),
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-
-  const res = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
-  const json = await res.json();
-
-  if (!res.ok || json.success === false) {
-    throw new Error(json.message || `API error ${res.status}`);
-  }
-
-  return json.data as T;
-}
-
-export async function login(email: string, password: string) {
-  const data = await apiFetch<{ user: AuthUser; token: AuthTokens }>('/api/v1/auth/login', {
+export async function mutate(
+  action: string,
+  payload: Record<string, unknown> = {},
+  context?: { activeBranchId?: string }
+): Promise<BootstrapPayload> {
+  return request<BootstrapPayload>('/mutate', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ action, payload, context }),
   });
-  storeSession(data.user, data.token);
-  return data;
 }
 
-export async function fetchWorkspaceState() {
-  return apiFetch<Record<string, unknown>>('/api/v1/workspace');
+export async function generateAiText(body: {
+  systemInstruction: string;
+  userMessage: string;
+  history?: { role: 'user' | 'model'; parts: { text: string }[] }[];
+  maxOutputTokens?: number;
+  temperature?: number;
+}): Promise<string> {
+  const res = await request<{ text: string }>('/ai/generate', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return res.text;
 }
 
-export async function saveWorkspaceState(state: Record<string, unknown>) {
-  const token = getStoredToken();
-  const res = await fetch(`${API_BASE_URL}/api/v1/workspace`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(state),
+export async function syncBootstrap(data: BootstrapPayload): Promise<BootstrapPayload> {
+  const res = await fetch(`${API_BASE}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   });
-  const json = await res.json();
-  if (!res.ok || json.success === false) {
-    throw new Error(json.message || 'Failed to save workspace');
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `API ${res.status}`);
   }
+  return res.json() as Promise<BootstrapPayload>;
 }
 
 export async function checkApiHealth(): Promise<boolean> {
   try {
-    const res = await fetch(`${API_BASE_URL}/health`);
-    const json = await res.json();
-    return json.status === 'ok';
+    const res = await fetch(`${API_BASE}/health`);
+    return res.ok;
   } catch {
     return false;
   }
+}
+
+export function applyBootstrapData(
+  data: BootstrapPayload
+): Omit<BootstrapPayload, never> {
+  return { ...data };
 }

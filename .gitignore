@@ -6,5 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+!backend/.env.example
+backend/data/
+backend/dist/
+backend/node_modules/
 backend/sereni-base/
-backend/coworking-api/node_modules/

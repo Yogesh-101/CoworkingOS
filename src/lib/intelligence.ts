@@ -9,12 +9,6 @@ import type {
   InternalTask,
   Invoice,
 } from '@/types';
-import {
-  navigationReply,
-  parseAssistNavigation,
-  platformAccessReply,
-  wantsPlatformAccess,
-} from '@/lib/assist-navigation';
 
 export interface LeadScore {
   leadId: string;
@@ -336,15 +330,6 @@ export function generateChatbotReply(
 ): string {
   const q = query.toLowerCase();
 
-  if (!ctx.isPublic) {
-    const navTab = parseAssistNavigation(query);
-    if (navTab) return navigationReply(navTab);
-  }
-
-  if (ctx.isPublic && wantsPlatformAccess(query)) {
-    return platformAccessReply();
-  }
-
   if (ctx.isPublic) {
     if (q.includes('pricing') || q.includes('plan') || q.includes('cost')) {
       return 'CoworkingOS offers flexible workspace plans — hot desks from $399/mo, dedicated desks from $790/mo, and meeting rooms from $1,200/mo. Sign in to explore live pricing and branch availability.';
@@ -380,9 +365,9 @@ export function generateChatbotReply(
   }
   if (q.includes('hello') || q.includes('hi') || q.includes('help')) {
     if (ctx.isPublic) {
-      return `Hi! I'm CoworkingOS Assist. Ask about our platform, pricing, or say "Enter platform" to sign in — type or use the mic to navigate.`;
+      return `Hi! I'm CoworkingOS Assist. Ask about our platform, pricing, occupancy forecasts, or how to sign in — I can also share live demo workspace stats.`;
     }
-    return `Hi! I'm CoworkingOS Assist. Ask about occupancy, leads, renewals, or say "Open CRM" / "Go to billing" to navigate — type or tap the mic.`;
+    return `Hi! I'm CoworkingOS Assist. Ask about occupancy forecasts, lead scores, renewals, visitors, tickets, or staff productivity — all answers use live workspace data.`;
   }
 
   if (ctx.isPublic) {

@@ -8,7 +8,6 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { isTabAllowed } from '@/lib/rbac';
-import { USE_SERENIBASE } from '@/lib/api/config';
 
 const navItems = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,7 +23,7 @@ const navItems = [
 ] as const;
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, role, openRoleSelect, logout } = useStore();
+  const { activeTab, setActiveTab, role, openRoleSelect } = useStore();
 
   // Dynamic state for User Profile with local persistence setup
   const [adminName, setAdminName] = useState(() => localStorage.getItem('co_admin_name') || 'Admin User');
@@ -181,13 +180,12 @@ export function Sidebar() {
                     type="button"
                     onClick={() => {
                       setIsProfileOpen(false);
-                      if (USE_SERENIBASE) logout();
-                      else openRoleSelect();
+                      openRoleSelect();
                     }}
                     className="w-full py-2.5 rounded-xl text-[10px] font-bold bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-300 flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
-                    {USE_SERENIBASE ? 'Sign out' : 'Switch role'}
+                    Switch role
                   </button>
                   <div className="flex items-center gap-2">
                     <button

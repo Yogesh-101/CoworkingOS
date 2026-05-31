@@ -1,5 +1,3 @@
-export const USE_SERENIBASE =
-  import.meta.env.VITE_USE_SERENIBASE === 'true' || import.meta.env.VITE_USE_SERENIBASE === '1';
-
-/** Empty string uses Vite dev proxy to coworking-api (:3001). */
-export const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+/** When true, workspace data is loaded from and persisted to the CoworkingOS API (SQLite). */
+export const USE_API =
+  import.meta.env.VITE_USE_API !== 'false';

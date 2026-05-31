@@ -1,62 +1,98 @@
-import { USE_SERENIBASE } from './config';
-import { fetchWorkspaceState, saveWorkspaceState } from './client';
+import { fetchBootstrap, mutate, type BootstrapPayload } from './client';
+import { USE_API } from './config';
+import type { AppState } from '@/store';
 
-export { USE_SERENIBASE };
-
+let hydrating = false;
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
-let isHydrating = false;
 
-export type WorkspacePayload = Record<string, unknown>;
+export function setHydrating(value: boolean): void {
+  hydrating = value;
+}
 
-const PERSIST_KEYS = [
-  'activeBranchId',
-  'branches',
-  'leads',
-  'invoices',
-  'notifications',
-  'visitors',
-  'onboardings',
-  'proposals',
-  'employees',
-  'tickets',
-  'tasks',
-  'chatMessages',
-  'cmsSettings',
-  'integrations',
-  'renewals',
-  'kpi',
-  'userSettings',
-] as const;
+export function isHydrating(): boolean {
+  return hydrating;
+}
 
-export function extractWorkspacePayload(state: WorkspacePayload): WorkspacePayload {
-  const payload: WorkspacePayload = {};
-  for (const key of PERSIST_KEYS) {
-    if (key in state) payload[key] = state[key];
+export function mapBootstrapToState(data: BootstrapPayload): Partial<AppState> {
+  return {
+    branches: data.branches,
+    leads: data.leads,
+    invoices: data.invoices,
+    kpi: data.kpi,
+    notifications: data.notifications,
+    visitors: data.visitors,
+    onboardings: data.onboardings,
+    proposals: data.proposals,
+    employees: data.employees,
+    tickets: data.tickets,
+    tasks: data.tasks,
+    chatMessages: data.chatMessages,
+    supportMessages: data.supportMessages,
+    cmsSettings: data.cmsSettings,
+    integrations: data.integrations,
+    renewals: data.renewals,
+    userSettings: data.userSettings,
+  };
+}
+
+export function extractWorkspacePayload(state: AppState): BootstrapPayload {
+  return {
+    branches: state.branches,
+    leads: state.leads,
+    invoices: state.invoices,
+    kpi: state.kpi,
+    notifications: state.notifications,
+    visitors: state.visitors,
+    onboardings: state.onboardings,
+    proposals: state.proposals,
+    employees: state.employees,
+    tickets: state.tickets,
+    tasks: state.tasks,
+    chatMessages: state.chatMessages,
+    supportMessages: state.supportMessages,
+    cmsSettings: state.cmsSettings,
+    integrations: state.integrations,
+    renewals: state.renewals,
+    userSettings: state.userSettings,
+  };
+}
+
+export async function hydrateFromApi(): Promise<Partial<AppState>> {
+  const data = await fetchBootstrap();
+  return mapBootstrapToState(data);
+}
+
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
+
+async function syncToApi(payload: BootstrapPayload): Promise<void> {
+  const res = await fetch(`${API_BASE}/sync`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(err.error ?? `Sync failed (${res.status})`);
   }
-  return payload;
 }
 
-export function setHydrating(value: boolean) {
-  isHydrating = value;
-}
-
-export async function hydrateFromApi(): Promise<WorkspacePayload> {
-  isHydrating = true;
-  try {
-    return await fetchWorkspaceState();
-  } finally {
-    isHydrating = false;
-  }
-}
-
-export function schedulePersist(getState: () => WorkspacePayload) {
-  if (!USE_SERENIBASE || isHydrating) return;
+export function schedulePersist(getPayload: () => BootstrapPayload): void {
+  if (!USE_API || hydrating) return;
   if (persistTimer) clearTimeout(persistTimer);
-  persistTimer = setTimeout(async () => {
-    try {
-      await saveWorkspaceState(extractWorkspacePayload(getState()));
-    } catch (err) {
-      console.error('Workspace persist failed:', err);
-    }
-  }, 600);
+  persistTimer = setTimeout(() => {
+    void syncToApi(getPayload()).catch((err) => {
+      console.warn('[CoworkingOS API] persist failed:', err);
+    });
+  }, 400);
+}
+
+export { USE_API };
+
+export async function runMutationViaApi(
+  action: string,
+  payload: Record<string, unknown>,
+  context?: { activeBranchId?: string }
+): Promise<Partial<AppState>> {
+  const data = await mutate(action, payload, context);
+  return mapBootstrapToState(data);
 }

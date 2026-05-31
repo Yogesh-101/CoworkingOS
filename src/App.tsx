@@ -1,8 +1,7 @@
 import { lazy, Suspense, useEffect, type ReactNode } from 'react';
 import { Layout } from './components/layout/Layout';
 import { LandingPage } from './components/landing/LandingPage';
-import { RoleSelectScreen } from './components/auth/RoleSelectScreen';
-import { LoginScreen } from './components/auth/LoginScreen';
+import { SignInScreen } from './components/auth/SignInScreen';
 import { SupportChatbot } from './components/intelligence/SupportChatbot';
 import { useStore } from './store';
 
@@ -101,6 +100,7 @@ function preloadAppModules() {
 
 export default function App() {
   const view = useStore((state) => state.view);
+  const apiLoading = useStore((state) => state.apiLoading);
 
   useEffect(() => {
     if (view === 'app') preloadAppModules();
@@ -109,12 +109,18 @@ export default function App() {
   return (
     <>
       {view === 'landing' && <LandingPage />}
-      {view === 'role-select' && <RoleSelectScreen />}
-      {view === 'login' && <LoginScreen />}
+      {view === 'sign-in' && <SignInScreen />}
       {view === 'app' && (
         <Layout>
           <ActiveModule />
         </Layout>
+      )}
+      {apiLoading && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-zinc-900 border border-zinc-805 rounded-2xl px-6 py-4 text-sm font-semibold text-zinc-200">
+            Loading workspace from database…
+          </div>
+        </div>
       )}
       <SupportChatbot />
     </>
