@@ -59,5 +59,5 @@ export function wantsPlatformAccess(query: string): boolean {
 }
 
 export function platformAccessReply(): string {
-  return 'Taking you to role selection — pick your role to enter the CoworkingOS workspace.';
+  return 'Taking you to sign in — use demo credentials or your account to enter the CoworkingOS workspace.';
 }

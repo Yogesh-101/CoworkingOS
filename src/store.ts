@@ -260,7 +260,7 @@ const mockSupportMessages: SupportMessage[] = [
   {
     id: 'sup-1',
     role: 'assistant',
-    text: "Hi! I'm CoworkingOS Assist. Ask about occupancy forecasts, lead scores, renewals, visitors, tickets, or staff productivity — all answers use live workspace data.",
+    text: "Hi! I'm CoworkingOS Assist. Ask about occupancy, leads, or renewals — or say \"Open CRM\" / \"Go to billing\" to navigate. Tap the mic for voice.",
     time: format(new Date(), 'hh:mm a'),
   },
 ];
