@@ -8,7 +8,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Lead, ClientOnboarding, Proposal } from '@/types';
+import { formatINR, WORKSPACE_PRICING } from '@/lib/currency';
 import { computeLeadScores, getLeadScoreForId } from '@/lib/intelligence';
+import { SignaturePad } from '@/components/ui/SignaturePad';
+import { OnboardingESignPanel } from '@/components/onboarding/OnboardingESignPanel';
+import { isSendGridConnected } from '@/lib/onboarding-mail';
 
 const STAGES = ['new', 'contacted', 'qualified', 'proposal', 'negotiation', 'won', 'lost'] as const;
 
@@ -16,13 +20,20 @@ export function CRM() {
   const { 
     leads, addLead, updateLeadStage, deleteLead,
     onboardings, toggleOnboardingStep, completeOnboarding,
-    proposals, addProposal, updateProposalStatus
+    sendOnboardingWelcomeEmail, recordOnboardingSignature, sendOnboardingFormEmail,
+    proposals, addProposal, updateProposalStatus, recordProposalSignature,
+    branches, integrations,
   } = useStore();
 
   const [activeSubTab, setActiveSubTab] = useState<'pipeline' | 'onboarding' | 'proposals'>('pipeline');
   const [searchTerm, setSearchTerm] = useState('');
   const [isNewLeadOpen, setIsNewLeadOpen] = useState(false);
   const [isNewProposalOpen, setIsNewProposalOpen] = useState(false);
+  const [signProposalId, setSignProposalId] = useState<string | null>(null);
+  const [proposalSignature, setProposalSignature] = useState<string | null>(null);
+  const [signerName, setSignerName] = useState('');
+
+  const sendGridConnected = isSendGridConnected(integrations);
   
   // New Lead Form State
   const [name, setName] = useState('');
@@ -106,6 +117,24 @@ export function CRM() {
     }
   };
 
+  const handleAcceptProposal = (prop: Proposal) => {
+    if (prop.signatureStatus !== 'signed') {
+      setSignProposalId(prop.id);
+      setSignerName(prop.leadName);
+      return;
+    }
+    updateProposalStatus(prop.id, 'accepted');
+  };
+
+  const confirmProposalSignature = () => {
+    if (!signProposalId || !proposalSignature || !signerName.trim()) return;
+    recordProposalSignature(signProposalId, signerName.trim(), proposalSignature);
+    updateProposalStatus(signProposalId, 'accepted');
+    setSignProposalId(null);
+    setProposalSignature(null);
+    setSignerName('');
+  };
+
   const handleCreateProposal = (e: React.FormEvent) => {
     e.preventDefault();
     if (!propLeadName || !propCompany) return;
@@ -172,7 +201,7 @@ export function CRM() {
               <div className="flex items-center gap-2">
                 <h3 className="text-base font-extrabold text-zinc-100">Live Stage Board</h3>
                 <span className="text-xs font-mono font-bold text-brand-500 bg-brand-500/10 px-2.5 py-0.5 rounded-full">
-                  Total ARR Pip: ${totalPipelineVal.toLocaleString()}
+                  Total ARR Pip: {formatINR(totalPipelineVal)}
                 </span>
                 {hotLeadCount > 0 && (
                   <span className="text-xs font-mono font-bold text-emerald-400 bg-emerald-500/10 px-2.5 py-0.5 rounded-full">
@@ -225,7 +254,7 @@ export function CRM() {
                         {leadsInStage.length}
                       </span>
                     </div>
-                    <span className="text-[11px] font-mono font-bold text-zinc-550">${stageTotal.toLocaleString()}</span>
+                    <span className="text-[11px] font-mono font-bold text-zinc-550">{formatINR(stageTotal)}</span>
                   </div>
                   
                   <div className="flex-1 rounded-3xl p-3 bg-zinc-950/40 flex flex-col gap-3.5 overflow-y-auto border border-zinc-805 shadow-inner max-h-[calc(100vh-18rem)]">
@@ -282,7 +311,7 @@ export function CRM() {
 
                           <div className="flex items-center justify-between border-t border-zinc-850 pt-3.5 mt-auto">
                             <span className="text-xs font-bold text-zinc-250 bg-zinc-950 border border-zinc-805 px-2.5 py-1 rounded-lg">
-                              ${lead.value.toLocaleString()}
+                              {formatINR(lead.value)}
                             </span>
 
                             {/* Stage Controls */}
@@ -334,13 +363,37 @@ export function CRM() {
                   <p className="text-xs">No active welcome onboarding workflows running.</p>
                 </div>
               ) : (
-                onboardings.map((onb) => (
+                onboardings.map((onb) => {
+                  const branch = branches.find((b) => b.id === onb.branchId) ?? branches[0];
+                  const desk = branch?.desks.find((d) => d.id === onb.deskId);
+                  return (
                   <div key={onb.id} className="p-5 bg-zinc-950/40 border border-zinc-850 rounded-2xl space-y-4 shadow-sm">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-900 pb-3 leading-none">
                       <div>
                         <span className="text-[9px] font-mono font-bold text-zinc-500 uppercase">ONBOARDING ID: {onb.id}</span>
                         <h4 className="font-extrabold text-white text-sm py-1 capitalize">{onb.clientName}</h4>
                         <p className="text-[11px] text-zinc-400">{onb.companyName} • {onb.email}</p>
+                        {onb.phone && <p className="text-[10px] text-zinc-550">{onb.phone}</p>}
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {onb.welcomeEmailSent ? (
+                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                              Welcome email sent {onb.welcomeEmailSentAt ? `· ${onb.welcomeEmailSentAt}` : ''}
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => sendOnboardingWelcomeEmail(onb.id)}
+                              className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20 cursor-pointer"
+                            >
+                              Send welcome email
+                            </button>
+                          )}
+                          {onb.leaseSignedAt && (
+                            <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-400 border border-zinc-750">
+                              Lease signed · {onb.leaseSignedBy}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Status indicator badge */}
@@ -397,6 +450,17 @@ export function CRM() {
                       ))}
                     </div>
 
+                    <OnboardingESignPanel
+                      onboarding={onb}
+                      branch={branch}
+                      desk={desk}
+                      sendGridConnected={sendGridConnected}
+                      onESign={(signedBy, signatureDataUrl, agreedAt) =>
+                        recordOnboardingSignature(onb.id, signedBy, signatureDataUrl, agreedAt)
+                      }
+                      onSendFormEmail={() => sendOnboardingFormEmail(onb.id)}
+                    />
+
                     {/* Auto Complete action */}
                     {onb.status !== 'completed' && (
                       <div className="flex justify-end pt-1">
@@ -409,7 +473,8 @@ export function CRM() {
                       </div>
                     )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
@@ -465,6 +530,16 @@ export function CRM() {
                       )}>
                         {prop.status}
                       </span>
+                      {prop.signatureStatus === 'signed' && (
+                        <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
+                          signed
+                        </span>
+                      )}
+                      {prop.signatureStatus === 'pending' && prop.status === 'sent' && (
+                        <span className="px-2 py-0.5 rounded text-[8px] font-extrabold uppercase border bg-amber-500/10 text-amber-400 border-amber-500/20">
+                          signature pending
+                        </span>
+                      )}
                     </div>
 
                     <h4 className="font-extrabold text-zinc-100 text-sm capitalize">{prop.leadName}</h4>
@@ -479,7 +554,7 @@ export function CRM() {
                     </div>
                     <div>
                       <span className="text-[8px] text-zinc-500 font-extrabold block">MONTHLY ARR / TERM</span>
-                      <span className="text-[10px] font-bold text-zinc-250 font-mono">${prop.monthlyFee}/mo ({prop.durationMonths}m)</span>
+                      <span className="text-[10px] font-bold text-zinc-250 font-mono">{formatINR(prop.monthlyFee)}/mo ({prop.durationMonths}m)</span>
                     </div>
                   </div>
 
@@ -487,8 +562,19 @@ export function CRM() {
                   <div className="flex items-center gap-1.5 shrink-0 self-start sm:self-auto min-w-[120px] justify-end">
                     {prop.status === 'sent' && (
                       <>
+                        {prop.signatureStatus !== 'signed' && (
+                          <button
+                            onClick={() => {
+                              setSignProposalId(prop.id);
+                              setSignerName(prop.leadName);
+                            }}
+                            className="p-1 px-3 bg-brand-500/15 hover:bg-brand-500 text-brand-400 hover:text-white border border-brand-500/30 text-[9px] font-black uppercase rounded-lg cursor-pointer transition-all"
+                          >
+                            Sign
+                          </button>
+                        )}
                         <button
-                          onClick={() => updateProposalStatus(prop.id, 'accepted')}
+                          onClick={() => handleAcceptProposal(prop)}
                           className="p-1 px-3 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-white border border-emerald-500/30 text-[9px] font-black uppercase rounded-lg cursor-pointer transition-all duration-200 active:scale-95 shadow-[0_0_12px_rgba(16,185,129,0.1)] hover:shadow-[0_0_15px_rgba(16,185,129,0.25)]"
                         >
                           Accept
@@ -593,7 +679,7 @@ export function CRM() {
                   <input 
                     type="text"
                     required
-                    placeholder="e.g. Richard Hendricks"
+                    placeholder="e.g. Priya Sharma"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl py-3 px-4 text-xs text-zinc-150 placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-semibold"
@@ -608,7 +694,7 @@ export function CRM() {
                     <input 
                       type="text"
                       required
-                      placeholder="e.g. Pied Piper"
+                      placeholder="e.g. Nuvista Technologies"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
                       className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl py-2.5 px-3.5 text-xs text-zinc-150 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 transition-all font-semibold"
@@ -622,7 +708,7 @@ export function CRM() {
                     <input 
                       type="email"
                       required
-                      placeholder="e.g. richard@piedpiper.com"
+                      placeholder="e.g. priya@nuvista.in"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       className="w-full bg-zinc-900/60 border border-zinc-800/80 rounded-xl py-2.5 px-3.5 text-xs text-zinc-150 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 transition-all font-semibold"
@@ -759,7 +845,7 @@ export function CRM() {
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Qualified Lead (Fullname)</label>
                   <input 
                     type="text" required
-                    placeholder="e.g. Mike Ross"
+                    placeholder="e.g. Arjun Reddy"
                     value={propLeadName}
                     onChange={(e) => setPropLeadName(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3 px-3.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500/50"
@@ -770,7 +856,7 @@ export function CRM() {
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Client Corporate / Corp</label>
                   <input 
                     type="text" required
-                    placeholder="e.g. Wayne Corp"
+                    placeholder="e.g. Nuvista Technologies"
                     value={propCompany}
                     onChange={(e) => setPropCompany(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3 px-3.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500/50"
@@ -788,10 +874,10 @@ export function CRM() {
                     }}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-300 cursor-pointer focus:outline-none font-semibold"
                   >
-                    <option value="hot-desk">Hot Desk ($199/mo)</option>
-                    <option value="dedicated">Dedicated Desk ($399/mo)</option>
-                    <option value="meeting-room">Conference Meeting Suite ($1200/mo)</option>
-                    <option value="private-office">Private Glass Suite ($3500/mo)</option>
+                    <option value="hot-desk">Hot Desk ({formatINR(WORKSPACE_PRICING.hotDesk)}/mo)</option>
+                    <option value="dedicated">Dedicated Desk ({formatINR(WORKSPACE_PRICING.dedicated)}/mo)</option>
+                    <option value="meeting-room">Conference Meeting Suite ({formatINR(WORKSPACE_PRICING.meeting)}/mo)</option>
+                    <option value="private-office">Private Glass Suite ({formatINR(WORKSPACE_PRICING.privateOffice)}/mo)</option>
                   </select>
                 </div>
 
@@ -832,6 +918,61 @@ export function CRM() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {signProposalId && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50"
+              onClick={() => {
+                setSignProposalId(null);
+                setProposalSignature(null);
+              }}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-zinc-900 border border-zinc-805 rounded-3xl p-6 z-50 shadow-2xl space-y-4"
+            >
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <FileSignature className="w-5 h-5 text-brand-500" />
+                Sign proposal
+              </h3>
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Signer name</label>
+                <input
+                  type="text"
+                  value={signerName}
+                  onChange={(e) => setSignerName(e.target.value)}
+                  className="w-full bg-zinc-950 border border-zinc-805 rounded-xl py-2.5 px-3 text-xs text-zinc-200 font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500/50"
+                />
+              </div>
+              <SignaturePad onChange={setProposalSignature} />
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSignProposalId(null)}
+                  className="flex-1 py-2.5 text-xs font-bold bg-zinc-950 text-zinc-400 border border-zinc-805 rounded-xl cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={confirmProposalSignature}
+                  disabled={!proposalSignature}
+                  className="flex-1 py-2.5 text-xs font-bold text-white bg-brand-500 hover:bg-brand-600 rounded-xl cursor-pointer disabled:opacity-50"
+                >
+                  Save signature
+                </button>
+              </div>
             </motion.div>
           </>
         )}

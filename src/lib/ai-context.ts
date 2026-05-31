@@ -34,7 +34,7 @@ Current workspace (${ctx.branchName}):
   if (ctx.isPublic) {
     return `${base}
 
-The user is on the public marketing site (not signed in). Explain CoworkingOS features, pricing (hot desk ~$399/mo, dedicated ~$790/mo, meeting rooms ~$1200/mo), and guide them to use "Enter Platform" or "Explore Demo" to sign in. If they ask to sign in or enter the app, confirm you are taking them to role selection. You may cite the demo stats above as sample data.`;
+The user is on the public marketing site (not signed in). Explain CoworkingOS features, pricing (hot desk ~₹7,999/mo, dedicated ~₹14,999/mo, meeting rooms ~₹24,999/mo), and guide them to use "Enter Platform" or "Explore Demo" to sign in. Branches are in Hyderabad (HITEC City, Gachibowli, Jubilee Hills). If they ask to sign in or enter the app, confirm you are taking them to role selection. You may cite the demo stats above as sample data.`;
   }
 
   return `${base}
@@ -66,7 +66,7 @@ export function pickTeamChatPersona(
 ): { name: string; role: string } {
   const lower = messageText.toLowerCase();
   if (channelId === 'billing-urgent' || lower.includes('invoice') || lower.includes('billing')) {
-    return { name: 'Gavin Belson', role: 'Branch Manager' };
+    return { name: 'Rajesh Kumar', role: 'Branch Manager' };
   }
   if (
     channelId === 'facility-alerts' ||
@@ -74,12 +74,12 @@ export function pickTeamChatPersona(
     lower.includes('network') ||
     lower.includes('hvac')
   ) {
-    return { name: 'Jared Dunn', role: 'IT Support' };
+    return { name: 'Suresh Babu', role: 'IT Support' };
   }
   if (lower.includes('visitor') || lower.includes('guest') || lower.includes('tour')) {
-    return { name: 'Monica Hall', role: 'Community Host' };
+    return { name: 'Lakshmi Priya', role: 'Community Host' };
   }
-  return { name: 'Monica Hall', role: 'Community Host' };
+  return { name: 'Lakshmi Priya', role: 'Community Host' };
 }
 
 export function snapshotFromStore(input: {

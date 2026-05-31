@@ -358,7 +358,7 @@ export function Helpdesk() {
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Filing Member Name</label>
                   <input 
                     type="text" required
-                    placeholder="e.g. Sarah Jenkins"
+                    placeholder="e.g. Priya Sharma"
                     value={ticketMember}
                     onChange={(e) => setTicketMember(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3 text-xs text-zinc-200 font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500/50"

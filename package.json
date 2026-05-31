@@ -11,7 +11,8 @@
     "build:api": "npm run build --prefix backend",
     "preview": "vite preview --port=3000 --host=0.0.0.0",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.14",
@@ -36,6 +37,7 @@
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.8.2",
-    "concurrently": "^9.1.2"
+    "concurrently": "^9.1.2",
+    "vitest": "^3.2.4"
   }
 }

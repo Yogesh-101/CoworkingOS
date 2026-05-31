@@ -435,7 +435,7 @@ export function Visitors() {
                   <input 
                     type="text"
                     required
-                    placeholder="e.g. Richard Hendricks"
+                    placeholder="e.g. Vikram Singh"
                     value={visitorName}
                     onChange={(e) => setVisitorName(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800/80 rounded-xl py-2.5 px-3.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 focus:border-brand-500 font-semibold"
@@ -447,7 +447,7 @@ export function Visitors() {
                     <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block">Visitor Corporate</label>
                     <input 
                       type="text"
-                      placeholder="e.g. Pied Piper Corp"
+                      placeholder="e.g. Infospectrum Labs"
                       value={company}
                       onChange={(e) => setCompany(e.target.value)}
                       className="w-full bg-zinc-900 border border-zinc-800/80 rounded-xl py-2.5 px-3.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 focus:border-brand-500"
@@ -481,7 +481,7 @@ export function Visitors() {
                   <input 
                     type="text"
                     required
-                    placeholder="e.g. Sarah Jenkins (Acme SaaS)"
+                    placeholder="e.g. Priya Sharma (Nuvista Technologies)"
                     value={host}
                     onChange={(e) => setHost(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800/80 rounded-xl py-2.5 px-3.5 text-xs text-zinc-200 placeholder:text-zinc-600 focus:outline-none focus:ring-1 focus:ring-brand-500/50 focus:border-brand-500 font-semibold"

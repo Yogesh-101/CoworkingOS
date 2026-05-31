@@ -32,6 +32,10 @@ export interface Lead {
   stage: 'new' | 'contacted' | 'qualified' | 'proposal' | 'negotiation' | 'won' | 'lost';
   value: number;
   lastContact: string;
+  phone?: string;
+  bio?: string;
+  notes?: string;
+  linkedIn?: string;
 }
 
 export interface Invoice {
@@ -82,6 +86,16 @@ export interface ClientOnboarding {
   progress: number; // 0 to 100
   steps: OnboardingStep[];
   status: 'pending' | 'active' | 'completed';
+  phone?: string;
+  bio?: string;
+  welcomeEmailSent?: boolean;
+  welcomeEmailSentAt?: string;
+  leaseSignedAt?: string;
+  leaseSignedBy?: string;
+  signatureDataUrl?: string;
+  eSignAgreedAt?: string;
+  onboardingFormSent?: boolean;
+  onboardingFormSentAt?: string;
 }
 
 // Quotation & Proposal Management
@@ -94,6 +108,10 @@ export interface Proposal {
   durationMonths: number;
   status: 'draft' | 'sent' | 'accepted' | 'declined';
   dateCreated: string;
+  signatureStatus?: 'pending' | 'signed' | 'declined';
+  signedAt?: string;
+  signedBy?: string;
+  signatureDataUrl?: string;
 }
 
 // Employee & Team Management
@@ -104,6 +122,14 @@ export interface Employee {
   branchId: string;
   email: string;
   status: 'active' | 'on-leave' | 'inactive';
+  phone?: string;
+  bio?: string;
+  department?: string;
+  startDate?: string;
+  skills?: string[];
+  presence?: 'online' | 'busy' | 'away' | 'offline';
+  avatarUrl?: string;
+  linkedIn?: string;
 }
 
 // Ticket & Resolution Management
@@ -141,6 +167,7 @@ export interface ChatMessage {
   time: string;
   priority?: 'normal' | 'urgent';
   pinned?: boolean;
+  senderId?: string;
 }
 
 // Website CMS settings
@@ -184,6 +211,23 @@ export interface UserSettings {
   notificationsEnabled: boolean;
   emailDigest: 'daily' | 'weekly' | 'none';
   privacyMode: boolean;
+  displayName?: string;
+  email?: string;
+  phone?: string;
+  bio?: string;
+  avatarUrl?: string;
+  department?: string;
+  linkedEmployeeId?: string;
+}
+
+export interface EmailLog {
+  id: string;
+  to: string;
+  subject: string;
+  template: 'onboarding-welcome' | 'onboarding-completion' | 'onboarding-reminder' | 'onboarding-form' | 'proposal-sent';
+  relatedId?: string;
+  sentAt: string;
+  status: 'sent' | 'queued' | 'failed';
 }
 
 export interface SupportMessage {

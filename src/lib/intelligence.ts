@@ -347,7 +347,7 @@ export function generateChatbotReply(
 
   if (ctx.isPublic) {
     if (q.includes('pricing') || q.includes('plan') || q.includes('cost')) {
-      return 'CoworkingOS offers flexible workspace plans — hot desks from $399/mo, dedicated desks from $790/mo, and meeting rooms from $1,200/mo. Sign in to explore live pricing and branch availability.';
+      return 'CoworkingOS offers flexible workspace plans — hot desks from ₹7,999/mo, dedicated desks from ₹14,999/mo, and meeting rooms from ₹24,999/mo. Sign in to explore live pricing and branch availability across Hyderabad.';
     }
     if (q.includes('coworkingos') || q.includes('what is') || q.includes('platform')) {
       return 'CoworkingOS is an all-in-one PropTech platform for coworking operators — floor maps, CRM, billing, visitor management, AI forecasting, and team ops in one workspace.';

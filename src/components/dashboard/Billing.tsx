@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Invoice, WorkspaceRenewal } from '@/types';
 import { format } from 'date-fns';
 import { jsPDF } from 'jspdf';
+import { formatINR, WORKSPACE_PRICING } from '@/lib/currency';
 import { computeRenewalPredictions } from '@/lib/intelligence';
 
 export function Billing() {
@@ -201,7 +202,7 @@ export function Billing() {
           doc.setFontSize(11);
           doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
           doc.text(selectedInvoice?.clientName || "Leaseholder", marginX, currentY);
-          doc.text("Downtown HQ Satellite", 190, currentY, { align: 'right' });
+          doc.text("HITEC City Hub", 190, currentY, { align: 'right' });
 
           currentY += 5;
           doc.setFontSize(9.5);
@@ -259,7 +260,7 @@ export function Billing() {
             
             currentY += 8;
             doc.text(item.label, marginX + 4, currentY);
-            doc.text(`$${item.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, 186, currentY, { align: 'right' });
+            doc.text(formatINR(item.value, { decimals: true }), 186, currentY, { align: 'right' });
             
             currentY += 3;
             doc.setDrawColor(240, 240, 240);
@@ -273,7 +274,7 @@ export function Billing() {
           doc.setFontSize(10);
           doc.setTextColor(darkGray[0], darkGray[1], darkGray[2]);
           doc.text("Ledger Subtotal:", 125, currentY);
-          doc.text(`$${amountVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 186, currentY, { align: 'right' });
+          doc.text(formatINR(amountVal, { decimals: true }), 186, currentY, { align: 'right' });
 
           currentY += 6;
           doc.text("Workspace Occupancy Levy (8.25%):", 125, currentY);
@@ -286,7 +287,7 @@ export function Billing() {
           doc.setFontSize(12);
           doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
           doc.text("TOTAL PAID:", 125, currentY);
-          doc.text(`$${amountVal.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 186, currentY, { align: 'right' });
+          doc.text(formatINR(amountVal, { decimals: true }), 186, currentY, { align: 'right' });
 
           // Notes / Footer
           currentY = 245;
@@ -355,10 +356,10 @@ export function Billing() {
     const doc = iframe.contentWindow?.document || iframe.contentDocument;
     if (!doc) return;
 
-    const baseRate = (invoice.amount * 0.85).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const fiberRate = (invoice.amount * 0.10).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const opsRate = (invoice.amount * 0.05).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const totalStr = invoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const baseRate = formatINR(invoice.amount * 0.85, { decimals: true });
+    const fiberRate = formatINR(invoice.amount * 0.10, { decimals: true });
+    const opsRate = formatINR(invoice.amount * 0.05, { decimals: true });
+    const totalStr = formatINR(invoice.amount, { decimals: true });
 
     doc.open();
     doc.write(`
@@ -441,8 +442,8 @@ export function Billing() {
         <body>
           <div class="header">
             <div class="title">COWORKINGOS BILLING SYSTEM</div>
-            <div class="subtitle">100 DOWNTOWN HQ BOULEVARD, SITE 400</div>
-            <div class="subtitle">TELEPHONE: +1 (555) 902-1049 &bull; LEDGER OFFICIAL RECEIPT</div>
+            <div class="subtitle">HITEC City Hub, Madhapur, Hyderabad 500081</div>
+            <div class="subtitle">TELEPHONE: +91 40 4021 1049 &bull; LEDGER OFFICIAL RECEIPT</div>
           </div>
           
           <div class="invoice-info">
@@ -469,19 +470,19 @@ export function Billing() {
             <tbody>
               <tr>
                 <td>Flex Workstation Leases (Base rate - 85%)</td>
-                <td style="text-align: right;">$\${baseRate}</td>
+                <td style="text-align: right;">\${baseRate}</td>
               </tr>
               <tr>
                 <td>Multi-Gig Fiber Core Access Addon (10%)</td>
-                <td style="text-align: right;">$\${fiberRate}</td>
+                <td style="text-align: right;">\${fiberRate}</td>
               </tr>
               <tr>
                 <td>Operations Support & Cleanups (5%)</td>
-                <td style="text-align: right;">$\${opsRate}</td>
+                <td style="text-align: right;">\${opsRate}</td>
               </tr>
               <tr class="row-total">
                 <td style="padding-top: 15px;">TOTAL LEDGER BALANCE (Levy Included)</td>
-                <td style="text-align: right; padding-top: 15px;">$\${totalStr}</td>
+                <td style="text-align: right; padding-top: 15px;">\${totalStr}</td>
               </tr>
             </tbody>
           </table>
@@ -552,9 +553,9 @@ export function Billing() {
           {/* Financial summary blocks */}
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             {[
-              { label: 'Total Volume', value: `$${totalInvoiced.toLocaleString()}`, color: 'text-zinc-100', bg: 'bg-zinc-900 border-zinc-850/50' },
-              { label: 'Settled Core', value: `$${paidInvoiced.toLocaleString()}`, color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-              { label: 'Outstanding Invoices', value: `$${pendingInvoiced.toLocaleString()}`, color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
+              { label: 'Total Volume', value: formatINR(totalInvoiced), color: 'text-zinc-100', bg: 'bg-zinc-900 border-zinc-850/50' },
+              { label: 'Settled Core', value: formatINR(paidInvoiced), color: 'text-emerald-400', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+              { label: 'Outstanding Invoices', value: formatINR(pendingInvoiced), color: 'text-amber-400', bg: 'bg-amber-500/10 border-amber-500/20' },
             ].map((stat, i) => (
               <div key={i} className={cn("rounded-2xl border p-4 shadow-sm flex flex-col justify-between", stat.bg)}>
                 <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{stat.label}</span>
@@ -637,7 +638,7 @@ export function Billing() {
                         {inv.clientName}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-zinc-500">{inv.dueDate}</td>
-                      <td className="py-3.5 px-4 font-mono font-black text-zinc-200">${inv.amount.toLocaleString()}</td>
+                      <td className="py-3.5 px-4 font-mono font-black text-zinc-200">{formatINR(inv.amount)}</td>
                       <td className="py-3.5 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-2">
                           {/* Quick swap billing state */}
@@ -729,7 +730,7 @@ export function Billing() {
                     </div>
                     <div>
                       <span className="text-[8px] text-zinc-500 font-extrabold block uppercase">MONTH RATE</span>
-                      <span className="text-[10px] font-bold text-zinc-300 font-mono">${r.monthlyFee.toLocaleString()}/mo</span>
+                      <span className="text-[10px] font-bold text-zinc-300 font-mono">{formatINR(r.monthlyFee)}/mo</span>
                     </div>
                   </div>
 
@@ -829,7 +830,7 @@ export function Billing() {
                   <label className="text-[10px] font-bold text-zinc-405 uppercase tracking-widest block">Billed Tenant Fullname</label>
                   <input 
                     type="text" required
-                    placeholder="e.g. Richard Hendricks"
+                    placeholder="e.g. Bharat FinServ"
                     value={clientName}
                     onChange={(e) => {
                       setClientName(e.target.value);
@@ -977,7 +978,7 @@ export function Billing() {
                     </div>
                     <div className="space-y-1 text-right">
                       <span className="text-[9px] font-bold text-zinc-550 uppercase tracking-widest block">Account Station</span>
-                      <p className="font-bold text-zinc-200">Downtown HQ</p>
+                      <p className="font-bold text-zinc-200">HITEC City Hub</p>
                       <p className="text-[10px] text-zinc-500">Cycle Due: {selectedInvoice.dueDate}</p>
                     </div>
                   </div>
@@ -992,22 +993,22 @@ export function Billing() {
                     <div className="space-y-2 text-xs">
                       <div className="flex justify-between">
                         <span className="text-zinc-450">Flex Workstation Leases (Base rate)</span>
-                        <span className="font-mono text-zinc-200">${(selectedInvoice.amount * 0.85).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-zinc-200">{formatINR(selectedInvoice.amount * 0.85, { decimals: true })}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-455">Multi-Gig Fiber Core Access Addon</span>
-                        <span className="font-mono text-zinc-200">${(selectedInvoice.amount * 0.10).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-zinc-200">{formatINR(selectedInvoice.amount * 0.10, { decimals: true })}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-455">Operations Support & Cleanups</span>
-                        <span className="font-mono text-zinc-200">${(selectedInvoice.amount * 0.05).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-zinc-200">{formatINR(selectedInvoice.amount * 0.05, { decimals: true })}</span>
                       </div>
                     </div>
 
                     <div className="border-t border-zinc-900 pt-3 space-y-2 text-xs">
                       <div className="flex justify-between">
                         <span className="text-zinc-500 font-sans">Subtotal amount</span>
-                        <span className="font-mono text-zinc-400">${(selectedInvoice.amount).toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-zinc-400">{formatINR(selectedInvoice.amount, { decimals: true })}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-zinc-550">Workspace Occupancy Levy (8.25%)</span>
@@ -1015,7 +1016,7 @@ export function Billing() {
                       </div>
                       <div className="flex justify-between border-t border-zinc-900/60 pt-2 text-sm font-bold">
                         <span className="text-white">Total Ledger Volume</span>
-                        <span className="text-brand-505 font-mono">${selectedInvoice.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                        <span className="text-brand-505 font-mono">{formatINR(selectedInvoice.amount, { decimals: true })}</span>
                       </div>
                     </div>
                   </div>

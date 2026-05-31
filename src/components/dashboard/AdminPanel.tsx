@@ -8,15 +8,19 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Employee, IntegrationSetting } from '@/types';
+import { PersonProfilePanel } from '@/components/people/PersonProfilePanel';
+import { avatarUrl } from '@/lib/people';
 
 export function ErpPage() {
   const { 
     employees, addEmployee, updateEmployeeStatus,
     integrations, toggleIntegration, updateIntegrationWebhook,
-    branches, activeBranchId 
+    branches, activeBranchId,
+    emailLogs,
   } = useStore();
 
   const [isNewEmployeeOpen, setIsNewEmployeeOpen] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [empName, setEmpName] = useState('');
   const [empMail, setEmpMail] = useState('');
   const [empRole, setEmpRole] = useState<Employee['role']>('Community Host');
@@ -24,22 +28,26 @@ export function ErpPage() {
   // Terminal logs state for visual tech factor
   const [terminalLogs, setTerminalLogs] = useState<string[]>([
     "[SYSTEM-BOOT] Initiating CoworkingOS central multi-center console ledger...",
-    "[KISI-GATEWAY] Kisi access controllers verified on Downtown HQ (30/30 gates active).",
+    "[KISI-GATEWAY] Kisi access controllers verified on HITEC City Hub (30/30 gates active).",
     "[SLACK-DISPATCH] Webhook authenticated for operations channels successfully.",
     "[SENDGRID-CRON] Checked 14 onboarding welcomes awaiting contract confirmations.",
     "[STRIPE-INTEG] Monthly recursive automated leases cycle scheduler synced."
   ]);
 
   const currentBranch = branches.find(b => b.id === activeBranchId) || branches[0];
+  const selectedEmployee = employees.find((e) => e.id === selectedEmployeeId);
 
   const triggerTerminalSync = () => {
     const timestamp = new Date().toLocaleTimeString();
+    const emailLine = emailLogs.length
+      ? `[SENDGRID-LOG] ${emailLogs.length} onboarding emails on record — latest: "${emailLogs[0]?.subject}" → ${emailLogs[0]?.to}.`
+      : '[SENDGRID-LOG] No onboarding emails logged yet.';
     const newLogs = [
       `[API-SYNC] (${timestamp}) Forcing master sync handshake...`,
-      `[KISI-LOG] Synchronized 84 RFID key accesses across NYC & Austin coordinates.`,
+      emailLine,
+      `[KISI-LOG] Synchronized 84 RFID key accesses across HITEC City & Gachibowli coordinates.`,
       `[SLACK-DISPATCH] Dispatched daily occupancy index reports.`,
-      `[ERP-SYSTEM] Garbage collector flushed. Active memory allocated: 142.4 MB.`,
-      ...terminalLogs.slice(0, 3)
+      ...terminalLogs.slice(0, 2)
     ];
     setTerminalLogs(newLogs);
   };
@@ -126,12 +134,10 @@ export function ErpPage() {
                 {employees.map((emp) => {
                   const allocatedBranch = branches.find(b => b.id === emp.branchId);
                   return (
-                    <tr key={emp.id} className="hover:bg-zinc-850/35 transition-colors">
+                    <tr key={emp.id} className="hover:bg-zinc-850/35 transition-colors cursor-pointer" onClick={() => setSelectedEmployeeId(emp.id)}>
                       <td className="py-3.5 px-4">
                         <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-zinc-950 border border-zinc-801 text-zinc-450 flex items-center justify-center font-bold text-[10px] uppercase font-mono shadow-sm">
-                            {emp.name.split(' ').map(n=>n[0]).join('')}
-                          </div>
+                          <img src={emp.avatarUrl ?? avatarUrl(emp.name)} alt="" className="w-8 h-8 rounded-full border border-zinc-801 object-cover" />
                           <div>
                             <span className="font-bold text-zinc-205 block">{emp.name}</span>
                             <span className="text-[10px] text-zinc-550 font-semibold">{emp.email}</span>
@@ -146,7 +152,10 @@ export function ErpPage() {
                       </td>
                       <td className="py-3.5 px-4 text-center">
                         <button
-                          onClick={() => updateEmployeeStatus(emp.id, emp.status === 'active' ? 'on-leave' : 'active')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateEmployeeStatus(emp.id, emp.status === 'active' ? 'on-leave' : 'active');
+                          }}
                           className={cn(
                             "px-2.5 py-1 text-[9px] font-black uppercase rounded-lg cursor-pointer leading-none transition-all",
                             emp.status === 'active' 
@@ -163,6 +172,30 @@ export function ErpPage() {
               </tbody>
             </table>
           </div>
+
+          {selectedEmployee && (
+            <div className="border-t border-zinc-850 pt-4">
+              <PersonProfilePanel
+                profile={{
+                  name: selectedEmployee.name,
+                  subtitle: selectedEmployee.email,
+                  email: selectedEmployee.email,
+                  phone: selectedEmployee.phone,
+                  role: selectedEmployee.role,
+                  department: selectedEmployee.department,
+                  location: branches.find((b) => b.id === selectedEmployee.branchId)?.name,
+                  startDate: selectedEmployee.startDate,
+                  bio: selectedEmployee.bio,
+                  skills: selectedEmployee.skills,
+                  presence: selectedEmployee.presence,
+                  avatarUrl: selectedEmployee.avatarUrl,
+                  badges: [selectedEmployee.status],
+                }}
+                onEdit={() => setSelectedEmployeeId(null)}
+                editLabel="Close"
+              />
+            </div>
+          )}
         </div>
 
         {/* Integrations Panel and Logs (2 cols) */}
@@ -275,7 +308,7 @@ export function ErpPage() {
                   <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block block">Employee Fullname</label>
                   <input 
                     type="text" required
-                    placeholder="e.g. Gilfoyle Stone"
+                    placeholder="e.g. Karthik Rao"
                     value={empName}
                     onChange={(e) => setEmpName(e.target.value)}
                     className="w-full bg-zinc-900 border border-zinc-800 rounded-xl py-2.5 px-3.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:ring-1 focus:ring-brand-500/50"

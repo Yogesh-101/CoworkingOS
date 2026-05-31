@@ -3,11 +3,41 @@ import {
   Branch, Desk, Lead, Invoice, KPIData, 
   Visitor, ClientOnboarding, Proposal, Employee, 
   Ticket, InternalTask, ChatMessage, CMSSettings, 
-  IntegrationSetting, WorkspaceRenewal, UserSettings, SupportMessage 
+  IntegrationSetting, WorkspaceRenewal, UserSettings, SupportMessage, EmailLog
 } from './types';
 import { subDays, format } from 'date-fns';
 import type { AppTab, UserRole } from './lib/rbac';
 import { USE_API, extractWorkspacePayload, hydrateFromApi, schedulePersist, setHydrating } from './lib/api/workspace-sync';
+import { formatINR, WORKSPACE_PRICING } from './lib/currency';
+import { dispatchOnboardingEmail, dispatchOnboardingFormEmail } from './lib/onboarding-mail';
+import { dmChannelId } from './lib/people';
+
+function applyOnboardingEmail(
+  ctx: {
+    integrations: IntegrationSetting[];
+    branches: Branch[];
+    activeBranchId: string;
+    emailLogs: EmailLog[];
+    notifications: Notification[];
+  },
+  onboardings: ClientOnboarding[],
+  onboardingId: string,
+  template: 'welcome' | 'completion' | 'reminder'
+): {
+  onboardings: ClientOnboarding[];
+  emailLogs: EmailLog[];
+  notifications: Notification[];
+} {
+  const result = dispatchOnboardingEmail({ ...ctx, onboardings }, onboardingId, template);
+  if (!result) {
+    return { onboardings, emailLogs: ctx.emailLogs, notifications: ctx.notifications };
+  }
+  return {
+    onboardings: result.onboardings,
+    emailLogs: result.emailLogs,
+    notifications: [result.notification, ...ctx.notifications],
+  };
+}
 
 export interface Notification {
   id: string;
@@ -53,16 +83,22 @@ export interface AppState {
   onboardings: ClientOnboarding[];
   toggleOnboardingStep: (onboardingId: string, stepId: string) => void;
   completeOnboarding: (id: string) => void;
-  
+  sendOnboardingWelcomeEmail: (onboardingId: string) => void;
+  sendOnboardingFormEmail: (onboardingId: string) => void;
+  recordOnboardingSignature: (onboardingId: string, signedBy: string, signatureDataUrl: string, eSignAgreedAt?: string) => void;
+  updateOnboardingProfile: (id: string, patch: Partial<ClientOnboarding>) => void;
+
   // Quotation & Proposal Management
   proposals: Proposal[];
   addProposal: (proposal: Omit<Proposal, 'id' | 'dateCreated' | 'status'>) => void;
   updateProposalStatus: (id: string, status: Proposal['status']) => void;
-  
+  recordProposalSignature: (id: string, signedBy: string, signatureDataUrl: string) => void;
+
   // Employee & Team Management
   employees: Employee[];
   addEmployee: (employee: Omit<Employee, 'id'>) => void;
   updateEmployeeStatus: (id: string, status: Employee['status']) => void;
+  updateEmployee: (id: string, patch: Partial<Employee>) => void;
   
   // Ticket & Resolution Management
   tickets: Ticket[];
@@ -81,8 +117,10 @@ export interface AppState {
     text: string,
     senderName: string,
     senderRole: string,
-    options?: { priority?: ChatMessage['priority'] }
+    options?: { priority?: ChatMessage['priority']; senderId?: string }
   ) => void;
+
+  emailLogs: EmailLog[];
 
   supportMessages: SupportMessage[];
   addSupportMessage: (role: SupportMessage['role'], text: string) => void;
@@ -108,6 +146,7 @@ export interface AppState {
   // Actions
   addLead: (lead: Omit<Lead, 'id' | 'lastContact'>) => void;
   updateLeadStage: (id: string, stage: Lead['stage']) => void;
+  updateLead: (id: string, patch: Partial<Lead>) => void;
   deleteLead: (id: string) => void;
   
   addInvoice: (invoice: Omit<Invoice, 'id'>) => void;
@@ -140,57 +179,63 @@ const generateDesks = (count: number): Desk[] => {
       height: isRoom ? 120 : 60,
       status: statuses[Math.floor(Math.random() * statuses.length)],
       type: isRoom ? (i === 3 ? 'private-office' : 'meeting-room') : types[Math.floor(Math.random() * 2)],
-      pricePerMonth: isRoom ? (i === 3 ? 3500 : 1200) : 399,
-      assigneeName: Math.random() > 0.4 ? 'Apex Labs Inc.' : undefined,
+      pricePerMonth: isRoom ? (i === 3 ? WORKSPACE_PRICING.privateOffice : WORKSPACE_PRICING.meeting) : WORKSPACE_PRICING.hotDesk,
+      assigneeName: Math.random() > 0.4 ? 'NovaTech Solutions Pvt Ltd' : undefined,
     });
   }
   return desks;
 };
 
 const mockBranches: Branch[] = [
-  { id: 'b1', name: 'Downtown Hub HQ', location: 'New York, NY', capacity: 250, occupancyRate: 84, desks: generateDesks(30) },
-  { id: 'b2', name: 'Westside Oasis', location: 'Austin, TX', capacity: 120, occupancyRate: 92, desks: generateDesks(20) },
-  { id: 'b3', name: 'Tech Park Center', location: 'London, UK', capacity: 400, occupancyRate: 65, desks: generateDesks(45) },
+  { id: 'b1', name: 'HITEC City Hub', location: 'Madhapur, Hyderabad', capacity: 250, occupancyRate: 84, desks: generateDesks(30) },
+  { id: 'b2', name: 'Gachibowli Workspace', location: 'Gachibowli, Hyderabad', capacity: 120, occupancyRate: 92, desks: generateDesks(20) },
+  { id: 'b3', name: 'Jubilee Hills Center', location: 'Jubilee Hills, Hyderabad', capacity: 400, occupancyRate: 65, desks: generateDesks(45) },
 ];
 
 const mockLeads: Lead[] = [
-  { id: 'l1', name: 'Sarah Jenkins', company: 'Acme SaaS', email: 'sarah@acme.io', stage: 'qualified', value: 4500, lastContact: '2h ago' },
-  { id: 'l2', name: 'Mike Ross', company: 'Legal Tech Co', email: 'mike@legal.co', stage: 'proposal', value: 12000, lastContact: '1d ago' },
-  { id: 'l3', name: 'David Chen', company: 'DataFlow Solutions', email: 'david@df.com', stage: 'new', value: 800, lastContact: 'Just now' },
-  { id: 'l4', name: 'Elena Rodriguez', company: 'Apex Design Lab', email: 'elena@design.co', stage: 'negotiation', value: 6400, lastContact: '3d ago' },
+  { id: 'l1', name: 'Priya Sharma', company: 'Nuvista Technologies', email: 'priya@nuvista.in', phone: '+91 98765 21001', bio: 'Founder building B2B SaaS for Indian enterprises.', stage: 'qualified', value: 375000, lastContact: '2h ago' },
+  { id: 'l2', name: 'Arjun Reddy', company: 'Nyaya Legaltech', email: 'arjun@nyaya.in', phone: '+91 98765 21002', bio: 'Legal ops lead expanding Hyderabad practice.', stage: 'proposal', value: 1000000, lastContact: '1d ago' },
+  { id: 'l3', name: 'Karthik Menon', company: 'DataVerse Analytics', email: 'karthik@dataverse.in', phone: '+91 98765 21003', stage: 'new', value: 65000, lastContact: 'Just now' },
+  { id: 'l4', name: 'Ananya Iyer', company: 'PixelCraft Studios', email: 'ananya@pixelcraft.in', phone: '+91 98765 21004', bio: 'Design agency scaling to dedicated suite.', stage: 'negotiation', value: 532000, lastContact: '3d ago' },
 ];
 
 const mockInvoices: Invoice[] = [
-  { id: 'INV-2041', clientName: 'Stark Industries', amount: 8450.00, status: 'paid', dueDate: format(subDays(new Date(), 2), 'MMM dd, yyyy') },
-  { id: 'INV-2042', clientName: 'Wayne Enterprises', amount: 4200.00, status: 'pending', dueDate: format(new Date(), 'MMM dd, yyyy') },
-  { id: 'INV-2043', clientName: 'Daily Planet', amount: 1250.00, status: 'overdue', dueDate: format(subDays(new Date(), 8), 'MMM dd, yyyy') },
-  { id: 'INV-2044', clientName: 'LexCorp Space', amount: 15400.00, status: 'pending', dueDate: format(new Date(), 'MMM dd, yyyy') },
+  { id: 'INV-2041', clientName: 'Infospectrum Labs', amount: 702000, status: 'paid', dueDate: format(subDays(new Date(), 2), 'MMM dd, yyyy') },
+  { id: 'INV-2042', clientName: 'Bharat FinServ', amount: 349000, status: 'pending', dueDate: format(new Date(), 'MMM dd, yyyy') },
+  { id: 'INV-2043', clientName: 'Telugu Times Media', amount: 104000, status: 'overdue', dueDate: format(subDays(new Date(), 8), 'MMM dd, yyyy') },
+  { id: 'INV-2044', clientName: 'Deccan Ventures', amount: 1278000, status: 'pending', dueDate: format(new Date(), 'MMM dd, yyyy') },
 ];
 
 const mockNotifications: Notification[] = [
-  { id: 'n-1', title: 'New lead qualified', description: 'Sarah Jenkins (Acme SaaS) is listed as qualified.', type: 'lead', time: '10m ago', read: false },
+  { id: 'n-1', title: 'New lead qualified', description: 'Priya Sharma (Nuvista Technologies) is listed as qualified.', type: 'lead', time: '10m ago', read: false },
   { id: 'n-2', title: 'Smart Access Gateway', description: 'Kisi API reports secondary gate successfully connected.', type: 'system', time: '1h ago', read: false },
-  { id: 'n-3', title: 'Invoice Paid', description: 'Invoice INV-2041 for Stark Industries completed ($8,450.00).', type: 'billing', time: '2h ago', read: true },
-  { id: 'n-4', title: 'Tour Requested', description: 'David Chen scheduled an in-person campus tour.', type: 'tour', time: '4h ago', read: false },
+  { id: 'n-3', title: 'Invoice Paid', description: 'Invoice INV-2041 for Infospectrum Labs completed (₹7,02,000).', type: 'billing', time: '2h ago', read: true },
+  { id: 'n-4', title: 'Tour Requested', description: 'Karthik Menon scheduled an in-person campus tour.', type: 'tour', time: '4h ago', read: false },
 ];
 
 // Mock Visitors
 const mockVisitors: Visitor[] = [
-  { id: 'v-1', name: 'Alice Cooper', company: 'Bandit Media', email: 'alice@bandit.co', phone: '+1 555-0192', host: 'Tech Corp Inc.', branchId: 'b1', checkInTime: '08:42 AM', status: 'checked-in' },
-  { id: 'v-2', name: 'Robert Downey', company: 'Stark Industries', email: 'rdj@stark.com', phone: '+1 555-4801', host: 'Front Desk', branchId: 'b1', checkInTime: '09:12 AM', status: 'checked-in' },
-  { id: 'v-3', name: 'John Peterson', company: 'Gartner Group', email: 'john@gartner.org', phone: '+1 555-8933', host: 'Sarah Jenkins', branchId: 'b2', checkInTime: 'Yesterday', checkOutTime: 'Yesterday, 4:00 PM', status: 'completed' },
+  { id: 'v-1', name: 'Meera Kapoor', company: 'Swara Digital Media', email: 'meera@swara.in', phone: '+91 98765 40192', host: 'NovaTech Solutions', branchId: 'b1', checkInTime: '08:42 AM', status: 'checked-in' },
+  { id: 'v-2', name: 'Vikram Singh', company: 'Infospectrum Labs', email: 'vikram@infospectrum.in', phone: '+91 98765 44801', host: 'Front Desk', branchId: 'b1', checkInTime: '09:12 AM', status: 'checked-in' },
+  { id: 'v-3', name: 'Rahul Deshmukh', company: 'KPMG India', email: 'rahul.d@kpmg.in', phone: '+91 98765 88933', host: 'Priya Sharma', branchId: 'b2', checkInTime: 'Yesterday', checkOutTime: 'Yesterday, 4:00 PM', status: 'completed' },
 ];
 
 // Mock Onboarding processes (Client Onboarding Workflow)
 const mockOnboarding: ClientOnboarding[] = [
   {
     id: 'onb-1',
-    clientName: 'Julian Alvarez',
-    companyName: 'Stellar Tech',
-    email: 'julian@stellar.co',
+    clientName: 'Rohan Malhotra',
+    companyName: 'Dhruva Tech',
+    email: 'rohan@dhruva.in',
+    phone: '+91 98765 22001',
+    bio: 'CTO onboarding a 12-person product team at HITEC City.',
     branchId: 'b1',
     deskId: 'desk-6',
     progress: 60,
+    welcomeEmailSent: true,
+    welcomeEmailSentAt: 'May 24, 2026 · 09:15 AM',
+    leaseSignedAt: 'May 22, 2026',
+    leaseSignedBy: 'Rohan Malhotra',
     steps: [
       { id: 'step-1', label: 'Review & Sign Workspace Lease Agreement', completed: true },
       { id: 'step-2', label: 'Issue Kisi Mobile Smart Access Key', completed: true },
@@ -202,9 +247,9 @@ const mockOnboarding: ClientOnboarding[] = [
   },
   {
     id: 'onb-2',
-    clientName: 'Emma Watson',
-    companyName: 'Magical Media LLC',
-    email: 'emma@magic.net',
+    clientName: 'Kavya Nair',
+    companyName: 'Chitraka Media',
+    email: 'kavya@chitraka.in',
     branchId: 'b2',
     progress: 20,
     steps: [
@@ -220,40 +265,54 @@ const mockOnboarding: ClientOnboarding[] = [
 
 // Mock Quotations & Proposals
 const mockProposals: Proposal[] = [
-  { id: 'prop-1', leadName: 'Elena Rodriguez', company: 'Apex Design Lab', deskType: 'private-office', monthlyFee: 2400, durationMonths: 6, status: 'sent', dateCreated: 'May 20, 2026' },
-  { id: 'prop-2', leadName: 'Sarah Jenkins', company: 'Acme SaaS', deskType: 'dedicated', monthlyFee: 399, durationMonths: 12, status: 'accepted', dateCreated: 'May 24, 2026' },
-  { id: 'prop-3', leadName: 'Mike Ross', company: 'Legal Tech Co', deskType: 'meeting-room', monthlyFee: 1200, durationMonths: 3, status: 'draft', dateCreated: 'May 25, 2026' },
+  { id: 'prop-1', leadName: 'Ananya Iyer', company: 'PixelCraft Studios', deskType: 'private-office', monthlyFee: 199000, durationMonths: 6, status: 'sent', dateCreated: 'May 20, 2026', signatureStatus: 'pending' },
+  { id: 'prop-2', leadName: 'Priya Sharma', company: 'Nuvista Technologies', deskType: 'dedicated', monthlyFee: WORKSPACE_PRICING.hotDesk, durationMonths: 12, status: 'accepted', dateCreated: 'May 24, 2026', signatureStatus: 'signed', signedAt: 'May 24, 2026', signedBy: 'Priya Sharma' },
+  { id: 'prop-3', leadName: 'Arjun Reddy', company: 'Nyaya Legaltech', deskType: 'meeting-room', monthlyFee: WORKSPACE_PRICING.meeting, durationMonths: 3, status: 'draft', dateCreated: 'May 25, 2026', signatureStatus: 'pending' },
 ];
 
 // Mock Employees
 const mockEmployees: Employee[] = [
-  { id: 'emp-1', name: 'Gavin Belson', role: 'Branch Manager', branchId: 'b1', email: 'gavin@coworking.os', status: 'active' },
-  { id: 'emp-2', name: 'Monica Hall', role: 'Community Host', branchId: 'b1', email: 'monica@coworking.os', status: 'active' },
-  { id: 'emp-3', name: 'Jared Dunn', role: 'IT Support', branchId: 'b1', email: 'jared@coworking.os', status: 'active' },
-  { id: 'emp-4', name: 'Gilfoyle Stone', role: 'IT Support', branchId: 'b2', email: 'gilf@coworking.os', status: 'active' },
-  { id: 'emp-5', name: 'Dinesh Chugtai', role: 'Receptionist', branchId: 'b3', email: 'dinesh@coworking.os', status: 'on-leave' },
+  { id: 'emp-1', name: 'Rajesh Kumar', role: 'Branch Manager', branchId: 'b1', email: 'rajesh@coworking.os', status: 'active', phone: '+91 98765 10101', department: 'Operations', startDate: 'Jan 2022', presence: 'online', bio: 'Leads HITEC City hub — renewals, vendor ops, and branch KPIs.', skills: ['Lease renewals', 'Multi-branch ops', 'Vendor management'] },
+  { id: 'emp-2', name: 'Lakshmi Priya', role: 'Community Host', branchId: 'b1', email: 'lakshmi@coworking.os', status: 'active', phone: '+91 98765 10102', department: 'Community', startDate: 'Mar 2023', presence: 'online', bio: 'Member experience, events, and onboarding tours across Madhapur.', skills: ['Member success', 'Events', 'CRM'] },
+  { id: 'emp-3', name: 'Suresh Babu', role: 'IT Support', branchId: 'b1', email: 'suresh@coworking.os', status: 'active', phone: '+91 98765 10103', department: 'Technology', startDate: 'Jun 2021', presence: 'busy', bio: 'Network, access control, and helpdesk escalations.', skills: ['WiFi', 'Kisi access', 'Helpdesk'] },
+  { id: 'emp-4', name: 'Karthik Rao', role: 'IT Support', branchId: 'b2', email: 'karthik@coworking.os', status: 'active', phone: '+91 98765 10104', department: 'Technology', startDate: 'Aug 2024', presence: 'away', bio: 'Gachibowli campus infrastructure and AV support.', skills: ['AV systems', 'Facilities tech'] },
+  { id: 'emp-5', name: 'Dinesh Chugtai', role: 'Receptionist', branchId: 'b3', email: 'dinesh@coworking.os', status: 'on-leave', phone: '+91 98765 10105', department: 'Front desk', startDate: 'Nov 2023', presence: 'offline', bio: 'Guest arrivals, badge printing, and visitor host coordination.' },
 ];
 
 // Mock Service Tickets
 const mockTickets: Ticket[] = [
-  { id: 't-1', title: 'WiFi Bandwidth Throttling', description: 'Members on secondary deck reporting latency above 120ms during peak hours.', category: 'WiFi/Network', priority: 'high', status: 'in-progress', branchId: 'b1', memberName: 'Sarah Jenkins', assignedTo: 'emp-3', dateCreated: 'May 24, 2026' },
-  { id: 't-2', title: 'Main AC Unit Temperature Control', description: 'Conference Room 2 main ventilation gets too gold relative to default thermostat.', category: 'Facilities', priority: 'medium', status: 'open', branchId: 'b1', memberName: 'Julian Alvarez', dateCreated: 'May 25, 2026' },
-  { id: 't-3', title: 'Broken Coffee Pod Dispenser', description: 'Lobby level machine jams when dispensing decaf pods.', category: 'Cleaning', priority: 'low', status: 'resolved', branchId: 'b2', memberName: 'Emma Watson', assignedTo: 'emp-4', dateCreated: 'May 18, 2026' },
+  { id: 't-1', title: 'WiFi Bandwidth Throttling', description: 'Members on secondary deck reporting latency above 120ms during peak hours.', category: 'WiFi/Network', priority: 'high', status: 'in-progress', branchId: 'b1', memberName: 'Priya Sharma', assignedTo: 'emp-3', dateCreated: 'May 24, 2026' },
+  { id: 't-2', title: 'Main AC Unit Temperature Control', description: 'Conference Room 2 main ventilation gets too cold relative to default thermostat.', category: 'Facilities', priority: 'medium', status: 'open', branchId: 'b1', memberName: 'Rohan Malhotra', dateCreated: 'May 25, 2026' },
+  { id: 't-3', title: 'Broken Coffee Pod Dispenser', description: 'Lobby level machine jams when dispensing decaf pods.', category: 'Cleaning', priority: 'low', status: 'resolved', branchId: 'b2', memberName: 'Kavya Nair', assignedTo: 'emp-4', dateCreated: 'May 18, 2026' },
 ];
 
 // Mock Internal Operational Tasks
 const mockTasks: InternalTask[] = [
-  { id: 'tsk-1', title: 'Complete onboarding desk clean-labeling for Stellar Tech', description: 'Affix brand logo and connect terminal cables for desk W-6.', priority: 'medium', status: 'todo', assignedTo: 'emp-2', dueDate: 'May 28, 2026' },
+  { id: 'tsk-1', title: 'Complete onboarding desk clean-labeling for Dhruva Tech', description: 'Affix brand logo and connect terminal cables for desk W-6.', priority: 'medium', status: 'todo', assignedTo: 'emp-2', dueDate: 'May 28, 2026' },
   { id: 'tsk-2', title: 'Restore printer toner cartridge Level 3', description: 'Install high-yield black ink toner unit on Floor 3 north xerox module.', priority: 'high', status: 'in-progress', assignedTo: 'emp-3', dueDate: 'May 27, 2026' },
 ];
 
 const mockChatMessages: ChatMessage[] = [
-  { id: 'msg-1', channel: 'ops-downtown-hq', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Sarah from Acme SaaS wants Private Suite Room 4 next month — proposal draft attached in CRM.', time: '10:14 AM', pinned: true },
-  { id: 'msg-2', channel: 'ops-downtown-hq', senderName: 'Jared Dunn', senderRole: 'IT Support', text: 'Fiber port pre-config scheduled before move-in. ETA Thursday.', time: '10:22 AM' },
-  { id: 'msg-3', channel: 'billing-urgent', senderName: 'Gavin Belson', senderRole: 'Branch Manager', text: 'INV-2043 (Daily Planet) is 8 days overdue — need outreach before noon.', time: '09:48 AM', priority: 'urgent' },
-  { id: 'msg-4', channel: 'general', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Friday community breakfast at 9 AM in the lounge — all hosts welcome!', time: '09:00 AM' },
+  { id: 'msg-1', channel: 'ops-hitec-city', senderName: 'Lakshmi Priya', senderRole: 'Community Host', text: 'Priya from Nuvista Technologies wants Private Suite Room 4 next month — proposal draft attached in CRM.', time: '10:14 AM', pinned: true },
+  { id: 'msg-2', channel: 'ops-hitec-city', senderName: 'Suresh Babu', senderRole: 'IT Support', text: 'Fiber port pre-config scheduled before move-in. ETA Thursday.', time: '10:22 AM' },
+  { id: 'msg-3', channel: 'billing-urgent', senderName: 'Rajesh Kumar', senderRole: 'Branch Manager', text: 'INV-2043 (Telugu Times Media) is 8 days overdue — need outreach before noon.', time: '09:48 AM', priority: 'urgent' },
+  { id: 'msg-4', channel: 'general', senderName: 'Lakshmi Priya', senderRole: 'Community Host', text: 'Friday community breakfast at 9 AM in the lounge — all hosts welcome!', time: '09:00 AM' },
   { id: 'msg-5', channel: 'facility-alerts', senderName: 'System', senderRole: 'Automated', text: 'Conference Room 2 HVAC flagged — facilities ticket #t-2 linked.', time: '08:15 AM', priority: 'urgent' },
-  { id: 'msg-6', channel: 'member-shoutouts', senderName: 'Monica Hall', senderRole: 'Community Host', text: 'Shoutout to Stellar Tech for hitting 100% onboarding checklist this week!', time: 'Yesterday' },
+  { id: 'msg-6', channel: 'member-shoutouts', senderName: 'Lakshmi Priya', senderRole: 'Community Host', text: 'Shoutout to Dhruva Tech for hitting 100% onboarding checklist this week!', time: 'Yesterday' },
+  { id: 'msg-dm-1', channel: dmChannelId('emp-2'), senderName: 'Lakshmi Priya', senderRole: 'Community Host', senderId: 'emp-2', text: 'Can you confirm the tour slot for Nuvista tomorrow at 11 AM?', time: 'Yesterday' },
+  { id: 'msg-dm-2', channel: dmChannelId('emp-3'), senderName: 'Suresh Babu', senderRole: 'IT Support', senderId: 'emp-3', text: 'WiFi VLAN for Dhruva Tech is staged — ping me before move-in.', time: '10:05 AM' },
+];
+
+const mockEmailLogs: EmailLog[] = [
+  {
+    id: 'eml-seed-1',
+    to: 'rohan@dhruva.in',
+    subject: 'Welcome to CoworkingOS — Dhruva Tech',
+    template: 'onboarding-welcome',
+    relatedId: 'onb-1',
+    sentAt: 'May 24, 2026 · 09:15 AM',
+    status: 'sent',
+  },
 ];
 
 const mockSupportMessages: SupportMessage[] = [
@@ -268,13 +327,13 @@ const mockSupportMessages: SupportMessage[] = [
 // CMS Live Customizable State
 const initialCMS: CMSSettings = {
   heroTitle: 'The Enterprise Workspace Ecosystem',
-  heroSub: 'Next-generation coworking suites offering pristine private offices, smart fiber-fast dedicated desks, and automated visitor-friendly campuses designed for fast-growing ventures.',
+  heroSub: 'Next-generation coworking suites across Hyderabad — private offices, fiber-fast dedicated desks, and visitor-friendly campuses for fast-growing ventures.',
   brandingColor: 'brand',
   brandName: 'CoworkingOS',
   showPricing: true,
-  hotDeskPrice: 399,
-  dedicatedPrice: 790,
-  meetingPrice: 1200,
+  hotDeskPrice: WORKSPACE_PRICING.hotDesk,
+  dedicatedPrice: WORKSPACE_PRICING.dedicated,
+  meetingPrice: WORKSPACE_PRICING.meeting,
 };
 
 // Integrations Setting
@@ -287,9 +346,9 @@ const mockIntegrations: IntegrationSetting[] = [
 
 // Renewals Contracts
 const mockRenewals: WorkspaceRenewal[] = [
-  { id: 'ren-1', clientName: 'Stark Industries', companyName: 'Stark Labs', branchId: 'b1', deskName: 'Meeting Room 4', monthlyFee: 8450, renewalDate: 'Jun 15, 2026', paymentCycle: 'Monthly', status: 'active' },
-  { id: 'ren-2', clientName: 'LexCorp Space', companyName: 'LexCorp Venture', branchId: 'b1', deskName: 'Dedicated Suite A7', monthlyFee: 15400, renewalDate: 'Jun 20, 2026', paymentCycle: 'Monthly', status: 'pending-review' },
-  { id: 'ren-3', clientName: 'Wayne Enterprises', companyName: 'Wayne Tech', branchId: 'b2', deskName: 'Director Office 1', monthlyFee: 4200, renewalDate: 'Jul 01, 2026', paymentCycle: 'Monthly', status: 'active' }
+  { id: 'ren-1', clientName: 'Infospectrum Labs', companyName: 'Infospectrum R&D', branchId: 'b1', deskName: 'Meeting Room 4', monthlyFee: 702000, renewalDate: 'Jun 15, 2026', paymentCycle: 'Monthly', status: 'active' },
+  { id: 'ren-2', clientName: 'Deccan Ventures', companyName: 'Deccan Capital', branchId: 'b1', deskName: 'Dedicated Suite A7', monthlyFee: 1278000, renewalDate: 'Jun 20, 2026', paymentCycle: 'Monthly', status: 'pending-review' },
+  { id: 'ren-3', clientName: 'Bharat FinServ', companyName: 'Bharat FinTech', branchId: 'b2', deskName: 'Director Office 1', monthlyFee: 349000, renewalDate: 'Jul 01, 2026', paymentCycle: 'Monthly', status: 'active' }
 ];
 
 const DEFAULT_DEMO_PASSWORD = 'demo123';
@@ -356,14 +415,26 @@ export const useStore = create<AppState>((set, get) => ({
   tasks: mockTasks,
   chatMessages: mockChatMessages,
   supportMessages: mockSupportMessages,
+  emailLogs: mockEmailLogs,
   cmsSettings: initialCMS,
   integrations: mockIntegrations,
   renewals: mockRenewals,
-  userSettings: { theme: 'dark', notificationsEnabled: true, emailDigest: 'daily', privacyMode: false },
+  userSettings: {
+    theme: 'dark',
+    notificationsEnabled: true,
+    emailDigest: 'daily',
+    privacyMode: false,
+    displayName: 'Admin User',
+    email: 'admin@coworking.os',
+    phone: '+91 98765 10000',
+    bio: 'Workspace operator managing HITEC City and Gachibowli campuses.',
+    department: 'Operations',
+    linkedEmployeeId: 'emp-1',
+  },
 
   
   kpi: {
-    totalRevenue: 142500,
+    totalRevenue: 11800000,
     revenueGrowth: 12.4,
     occupancyRate: 80,
     occupancyGrowth: 3.2,
@@ -420,13 +491,27 @@ export const useStore = create<AppState>((set, get) => ({
     const computedProgress = Math.round((completedCount / updatedSteps.length) * 100);
     const status = computedProgress === 100 ? 'completed' as const : 'active' as const;
     
-    return {
-      onboardings: state.onboardings.map(o => 
-        o.id === onboardingId 
-          ? { ...o, steps: updatedSteps, progress: computedProgress, status } 
-          : o
-      )
-    };
+    let onboardings = state.onboardings.map(o => 
+      o.id === onboardingId 
+        ? { ...o, steps: updatedSteps, progress: computedProgress, status } 
+        : o
+    );
+    let emailLogs = state.emailLogs;
+    let notifications = state.notifications;
+
+    if (computedProgress >= 50 && computedProgress < 100 && onboarding.progress < 50) {
+      const emailed = applyOnboardingEmail(
+        { integrations: state.integrations, branches: state.branches, activeBranchId: state.activeBranchId, emailLogs, notifications },
+        onboardings,
+        onboardingId,
+        'reminder'
+      );
+      onboardings = emailed.onboardings;
+      emailLogs = emailed.emailLogs;
+      notifications = emailed.notifications;
+    }
+
+    return { onboardings, emailLogs, notifications };
   }),
   
   completeOnboarding: (id) => set((state) => {
@@ -435,6 +520,19 @@ export const useStore = create<AppState>((set, get) => ({
     
     const updatedSteps = onboarding.steps.map(step => ({ ...step, completed: true }));
     
+    let onboardings = state.onboardings.map(o => 
+      o.id === id 
+        ? { ...o, steps: updatedSteps, progress: 100, status: 'completed' as const } 
+        : o
+    );
+
+    const emailed = applyOnboardingEmail(
+      { integrations: state.integrations, branches: state.branches, activeBranchId: state.activeBranchId, emailLogs: state.emailLogs, notifications: state.notifications },
+      onboardings,
+      id,
+      'completion'
+    );
+
     const updatedNotifications: Notification[] = [
       {
         id: `n-${Date.now()}`,
@@ -444,18 +542,106 @@ export const useStore = create<AppState>((set, get) => ({
         time: 'Just now',
         read: false
       },
-      ...state.notifications
+      ...emailed.notifications
     ];
     
     return {
-      onboardings: state.onboardings.map(o => 
-        o.id === id 
-          ? { ...o, steps: updatedSteps, progress: 100, status: 'completed' as const } 
-          : o
-      ),
+      onboardings: emailed.onboardings,
+      emailLogs: emailed.emailLogs,
       notifications: updatedNotifications
     };
   }),
+
+  sendOnboardingWelcomeEmail: (onboardingId) => set((state) => {
+    const emailed = applyOnboardingEmail(
+      { integrations: state.integrations, branches: state.branches, activeBranchId: state.activeBranchId, emailLogs: state.emailLogs, notifications: state.notifications },
+      state.onboardings,
+      onboardingId,
+      'welcome'
+    );
+    if (emailed.emailLogs === state.emailLogs) return {};
+    return { onboardings: emailed.onboardings, emailLogs: emailed.emailLogs, notifications: emailed.notifications };
+  }),
+
+  sendOnboardingFormEmail: (onboardingId) => set((state) => {
+    const result = dispatchOnboardingFormEmail(
+      {
+        integrations: state.integrations,
+        onboardings: state.onboardings,
+        branches: state.branches,
+        emailLogs: state.emailLogs,
+      },
+      onboardingId
+    );
+    if (!result) return {};
+    return {
+      onboardings: result.onboardings,
+      emailLogs: result.emailLogs,
+      notifications: [result.notification, ...state.notifications],
+    };
+  }),
+
+  recordOnboardingSignature: (onboardingId, signedBy, signatureDataUrl, eSignAgreedAt) => set((state) => {
+    const onboarding = state.onboardings.find(o => o.id === onboardingId);
+    if (!onboarding) return {};
+
+    const agreedLabel = eSignAgreedAt
+      ? format(new Date(eSignAgreedAt), 'MMM dd, yyyy · hh:mm a')
+      : format(new Date(), 'MMM dd, yyyy · hh:mm a');
+
+    const updatedSteps = onboarding.steps.map(s =>
+      s.id === 'step-1' ? { ...s, completed: true } : s
+    );
+    const completedCount = updatedSteps.filter(s => s.completed).length;
+    const progress = Math.round((completedCount / updatedSteps.length) * 100);
+
+    let onboardings = state.onboardings.map(o =>
+      o.id === onboardingId
+        ? {
+            ...o,
+            steps: updatedSteps,
+            progress,
+            leaseSignedAt: format(new Date(), 'MMM dd, yyyy'),
+            leaseSignedBy: signedBy,
+            signatureDataUrl,
+            eSignAgreedAt: agreedLabel,
+            status: progress === 100 ? 'completed' as const : o.status,
+          }
+        : o
+    );
+
+    let emailLogs = state.emailLogs;
+    let notifications = state.notifications;
+
+    const formEmail = dispatchOnboardingFormEmail(
+      { integrations: state.integrations, onboardings, branches: state.branches, emailLogs },
+      onboardingId
+    );
+    if (formEmail) {
+      onboardings = formEmail.onboardings;
+      emailLogs = formEmail.emailLogs;
+      notifications = [formEmail.notification, ...state.notifications];
+    }
+
+    const signNotification: Notification = {
+      id: `n-${Date.now()}-esign`,
+      title: 'Digital e-sign captured',
+      description: `${signedBy} signed the onboarding form for ${onboarding.companyName}.`,
+      type: 'system',
+      time: 'Just now',
+      read: false,
+    };
+
+    return {
+      onboardings,
+      emailLogs,
+      notifications: [signNotification, ...notifications],
+    };
+  }),
+
+  updateOnboardingProfile: (id, patch) => set((state) => ({
+    onboardings: state.onboardings.map(o => o.id === id ? { ...o, ...patch } : o),
+  })),
   
   // Quotation & Proposal Actions
   addProposal: (p) => set((state) => {
@@ -463,14 +649,15 @@ export const useStore = create<AppState>((set, get) => ({
       ...p,
       id: `prop-${Date.now()}`,
       status: 'sent',
-      dateCreated: format(new Date(), 'MMM dd, yyyy')
+      dateCreated: format(new Date(), 'MMM dd, yyyy'),
+      signatureStatus: 'pending',
     };
     
     const updatedNotifications: Notification[] = [
       {
         id: `n-${Date.now()}`,
         title: 'Proposal Contract Sent',
-        description: `Quotation sent to ${p.leadName} (${p.company}) for a ${p.deskType} contract valued at $${p.monthlyFee}/month.`,
+        description: `Quotation sent to ${p.leadName} (${p.company}) for a ${p.deskType} contract valued at ${formatINR(p.monthlyFee)}/month.`,
         type: 'lead',
         time: 'Just now',
         read: false
@@ -493,6 +680,8 @@ export const useStore = create<AppState>((set, get) => ({
     let updatedOnboardings = [...state.onboardings];
     let updatedInvoices = [...state.invoices];
     let updatedKpi = { ...state.kpi };
+    let emailLogs = state.emailLogs;
+    let baseNotifications = state.notifications;
 
     if (status === 'accepted') {
       // 1. Promote corresponding lead to 'won' status in our pipeline
@@ -533,6 +722,16 @@ export const useStore = create<AppState>((set, get) => ({
       };
       updatedOnboardings = [newOnboarding, ...state.onboardings];
 
+      const emailed = applyOnboardingEmail(
+        { integrations: state.integrations, branches: state.branches, activeBranchId: state.activeBranchId, emailLogs: state.emailLogs, notifications: state.notifications },
+        updatedOnboardings,
+        newOnboarding.id,
+        'welcome'
+      );
+      updatedOnboardings = emailed.onboardings;
+      emailLogs = emailed.emailLogs;
+      baseNotifications = emailed.notifications;
+
       // 4. Update KPI metrics dynamically
       updatedKpi.activeMembers = state.kpi.activeMembers + 1;
 
@@ -549,7 +748,7 @@ export const useStore = create<AppState>((set, get) => ({
         {
           id: `n-${Date.now()}-inv`,
           title: 'Invoice Issued',
-          description: `Automated invoice ${newInvoiceId} generated for ${prop.company} ($${newInvoice.amount.toLocaleString()}).`,
+          description: `Automated invoice ${newInvoiceId} generated for ${prop.company} (${formatINR(newInvoice.amount)}).`,
           type: 'billing',
           time: 'Just now',
           read: false
@@ -575,7 +774,7 @@ export const useStore = create<AppState>((set, get) => ({
         read: false
       },
       ...additionalNotifications,
-      ...state.notifications
+      ...baseNotifications
     ];
     
     return {
@@ -584,9 +783,24 @@ export const useStore = create<AppState>((set, get) => ({
       onboardings: updatedOnboardings,
       invoices: updatedInvoices,
       kpi: updatedKpi,
+      emailLogs,
       notifications: updatedNotifications
     };
   }),
+
+  recordProposalSignature: (id, signedBy, signatureDataUrl) => set((state) => ({
+    proposals: state.proposals.map(p =>
+      p.id === id
+        ? {
+            ...p,
+            signatureStatus: 'signed' as const,
+            signedAt: format(new Date(), 'MMM dd, yyyy'),
+            signedBy,
+            signatureDataUrl,
+          }
+        : p
+    ),
+  })),
   
   // Employee & Team Actions
   addEmployee: (e) => set((state) => ({
@@ -595,6 +809,10 @@ export const useStore = create<AppState>((set, get) => ({
   
   updateEmployeeStatus: (id, status) => set((state) => ({
     employees: state.employees.map(e => e.id === id ? { ...e, status } : e)
+  })),
+
+  updateEmployee: (id, patch) => set((state) => ({
+    employees: state.employees.map(e => e.id === id ? { ...e, ...patch } : e),
   })),
   
   // Ticket Actions
@@ -667,6 +885,7 @@ export const useStore = create<AppState>((set, get) => ({
         channel,
         senderName,
         senderRole,
+        senderId: options?.senderId,
         text,
         time: format(new Date(), 'hh:mm a'),
         priority: options?.priority ?? 'normal',
@@ -728,7 +947,7 @@ export const useStore = create<AppState>((set, get) => ({
       {
         id: `n-${Date.now()}`,
         title: 'Workspace Lease Renewed',
-        description: `Successfully extended lease for ${ren.clientName} (${ren.companyName}) for $${ren.monthlyFee}/mo.`,
+        description: `Successfully extended lease for ${ren.clientName} (${ren.companyName}) for ${formatINR(ren.monthlyFee)}/mo.`,
         type: 'billing',
         time: 'Just now',
         read: false
@@ -824,6 +1043,10 @@ export const useStore = create<AppState>((set, get) => ({
     leads: state.leads.filter(l => l.id !== id)
   })),
 
+  updateLead: (id, patch) => set((state) => ({
+    leads: state.leads.map(l => l.id === id ? { ...l, ...patch } : l),
+  })),
+
   addInvoice: (invoice) => set((state) => {
     const newInvoice: Invoice = {
       ...invoice,
@@ -834,7 +1057,7 @@ export const useStore = create<AppState>((set, get) => ({
       {
         id: `n-${Date.now()}`,
         title: 'Invoice Issued',
-        description: `Invoice ${newInvoice.id} generated for ${invoice.clientName} ($${invoice.amount.toLocaleString()}).`,
+        description: `Invoice ${newInvoice.id} generated for ${invoice.clientName} (${formatINR(invoice.amount)}).`,
         type: 'billing',
         time: 'Just now',
         read: false
@@ -898,25 +1121,13 @@ export const useStore = create<AppState>((set, get) => ({
       };
     });
 
-    const updatedNotifications: Notification[] = [
+    const newOnboardingId = `onb-${Date.now()}`;
+    let updatedOnboardings = [
       {
-        id: `n-${Date.now()}`,
-        title: 'Desk Allocated Live',
-        description: `${selectedActivityLogText(desk.type)} ${desk.name} in ${branch.name} is now leased by ${assigneeName}.`,
-        type: 'system',
-        time: 'Just now',
-        read: false
-      },
-      ...state.notifications
-    ];
-
-    // Auto trigger automated onboarding!
-    const updatedOnboardings = [
-      {
-        id: `onb-${Date.now()}`,
+        id: newOnboardingId,
         clientName: assigneeName,
         companyName: assigneeName,
-        email: `${assigneeName.toLowerCase().replace(/\s+/g,'')}@apex-member.co`,
+        email: `${assigneeName.toLowerCase().replace(/\s+/g, '')}@member.co.in`,
         branchId,
         deskId,
         progress: 0,
@@ -925,17 +1136,45 @@ export const useStore = create<AppState>((set, get) => ({
           { id: 'step-2', label: 'Issue Kisi Mobile Smart Access Key', completed: false },
           { id: 'step-3', label: 'Collect Initial Month Deposit & Onboarding Fee', completed: false },
           { id: 'step-4', label: 'Introduce to Community Slack Workspace', completed: false },
-          { id: 'step-5', label: 'Setup Custom Dedicated Desk Label & Ergonomic Check-in', completed: false }
+          { id: 'step-5', label: 'Setup Custom Dedicated Desk Label & Ergonomic Check-in', completed: false },
         ],
-        status: 'pending' as const
+        status: 'pending' as const,
       },
-      ...state.onboardings
+      ...state.onboardings,
     ];
+
+    const emailed = applyOnboardingEmail(
+      {
+        integrations: state.integrations,
+        branches: state.branches,
+        activeBranchId: state.activeBranchId,
+        emailLogs: state.emailLogs,
+        notifications: state.notifications,
+      },
+      updatedOnboardings,
+      newOnboardingId,
+      'welcome'
+    );
+    updatedOnboardings = emailed.onboardings;
+
+    const deskNotification: Notification = {
+      id: `n-${Date.now()}`,
+      title: 'Desk Allocated Live',
+      description: `${selectedActivityLogText(desk.type)} ${desk.name} in ${branch.name} is now leased by ${assigneeName}.`,
+      type: 'system',
+      time: 'Just now',
+      read: false,
+    };
+    const emailNotification = emailed.notifications[0];
+    const mergedNotifications = emailNotification
+      ? [emailNotification, deskNotification, ...state.notifications]
+      : [deskNotification, ...state.notifications];
 
     return {
       branches: updatedBranches,
-      notifications: updatedNotifications,
+      notifications: mergedNotifications,
       onboardings: updatedOnboardings,
+      emailLogs: emailed.emailLogs,
       kpi: {
         ...state.kpi,
         activeMembers: state.kpi.activeMembers + 1,

@@ -18,6 +18,8 @@ import {
   PartyPopper,
   Building2,
   CircleDot,
+  UserCircle,
+  BookUser,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateGeminiText, isGeminiConfigured } from '@/lib/gemini';
@@ -27,19 +29,28 @@ import {
   snapshotFromStore,
   teamChannelHistoryForGemini,
 } from '@/lib/ai-context';
+import { dmChannelId, employeeIdFromDmChannel, isDmChannel, avatarUrl } from '@/lib/people';
+import { PersonProfilePanel } from '@/components/people/PersonProfilePanel';
 
 type ChannelId =
-  | 'ops-downtown-hq'
+  | 'ops-hitec-city'
   | 'billing-urgent'
   | 'general'
   | 'facility-alerts'
   | 'member-shoutouts'
-  | 'branch-westside';
+  | 'branch-gachibowli';
 
-const CHANNELS = [
+const CHANNELS: Array<{
+  id: ChannelId;
+  label: string;
+  desc: string;
+  icon: typeof Building2;
+  unread: number;
+  accent: string;
+}> = [
   {
-    id: 'ops-downtown-hq' as const,
-    label: 'ops-downtown-hq',
+    id: 'ops-hitec-city' as const,
+    label: 'ops-hitec-city',
     desc: 'Visitor arrivals, tours & daily ops handoffs',
     icon: Building2,
     unread: 0,
@@ -78,9 +89,9 @@ const CHANNELS = [
     accent: 'emerald',
   },
   {
-    id: 'branch-westside' as const,
-    label: 'westside-oasis',
-    desc: 'Austin campus — local staff coordination only',
+    id: 'branch-gachibowli' as const,
+    label: 'gachibowli-workspace',
+    desc: 'Gachibowli campus — local staff coordination only',
     icon: Coffee,
     unread: 0,
     accent: 'zinc',
@@ -95,19 +106,23 @@ const QUICK_TEMPLATES = [
   { label: 'Team huddle', text: 'Quick 15-min standup in the lounge at :30 — all hosts welcome.', icon: Coffee },
 ];
 
-const ONLINE_STAFF = [
-  { name: 'Monica Hall', role: 'Community Host', status: 'online' },
-  { name: 'Jared Dunn', role: 'IT Support', status: 'busy' },
-  { name: 'Gavin Belson', role: 'Branch Manager', status: 'online' },
-  { name: 'Gilfoyle Stone', role: 'IT Support', status: 'away' },
-];
-
-function buildFallbackTeamReplyAuthor(channelId: string, text: string) {
+function buildFallbackTeamReplyAuthor(channelId: string, text: string, employees: { id: string; name: string; role: string }[]) {
+  if (isDmChannel(channelId)) {
+    const empId = employeeIdFromDmChannel(channelId);
+    const emp = employees.find((e) => e.id === empId);
+    if (emp) return { name: emp.name, role: emp.role };
+  }
   return pickTeamChatPersona(channelId, text);
 }
 
 function buildFallbackTeamReply(channelId: string, text: string): string {
   const lower = text.toLowerCase();
+  if (isDmChannel(channelId)) {
+    if (lower.includes('tour') || lower.includes('onboard')) {
+      return 'Got it — I will confirm the tour slot and update the onboarding checklist.';
+    }
+    return 'Thanks — I will follow up on this shortly.';
+  }
   if (channelId === 'billing-urgent' || lower.includes('invoice')) {
     return 'Finance desk is on it. I will update the AR ledger within the hour.';
   }
@@ -129,12 +144,15 @@ export function TeamChat() {
     branches,
     activeBranchId,
     leads,
+    onboardings,
     tickets,
     renewals,
     invoices,
     visitors,
+    userSettings,
   } = useStore();
-  const [activeChannel, setActiveChannel] = useState<ChannelId>('ops-downtown-hq');
+  const [activeChannel, setActiveChannel] = useState<string>('ops-hitec-city');
+  const [sidebarView, setSidebarView] = useState<'channels' | 'directory'>('channels');
   const [inputText, setInputText] = useState('');
   const [markUrgent, setMarkUrgent] = useState(false);
   const [showTemplates, setShowTemplates] = useState(true);
@@ -144,14 +162,37 @@ export function TeamChat() {
   const geminiEnabled = isGeminiConfigured();
 
   const adminName = useMemo(
-    () => (typeof localStorage !== 'undefined' ? localStorage.getItem('co_admin_name') : null) || 'Admin User',
-    []
+    () => userSettings.displayName || (typeof localStorage !== 'undefined' ? localStorage.getItem('co_admin_name') : null) || 'Admin User',
+    [userSettings.displayName]
+  );
+  const adminSenderId = userSettings.linkedEmployeeId ?? 'admin';
+
+  const dmEmployee = useMemo(() => {
+    if (!isDmChannel(activeChannel)) return null;
+    const empId = employeeIdFromDmChannel(activeChannel);
+    return employees.find((e) => e.id === empId) ?? null;
+  }, [activeChannel, employees]);
+
+  const activeStaff = useMemo(
+    () => employees.filter((e) => e.status === 'active'),
+    [employees]
   );
 
   const filteredMessages = chatMessages.filter((m) => m.channel === activeChannel);
   const pinnedMessage = filteredMessages.find((m) => m.pinned);
   const threadMessages = filteredMessages.filter((m) => !m.pinned);
-  const activeChannelMeta = CHANNELS.find((c) => c.id === activeChannel)!;
+  const channelMeta = CHANNELS.find((c) => c.id === activeChannel);
+  const activeChannelMeta = dmEmployee
+    ? {
+        label: dmEmployee.name,
+        desc: `${dmEmployee.role} · Direct message`,
+        icon: UserCircle,
+      }
+    : channelMeta ?? {
+        label: activeChannel,
+        desc: 'Team channel',
+        icon: Hash,
+      };
 
   useEffect(() => {
     shouldStickToBottomRef.current = true;
@@ -176,11 +217,12 @@ export function TeamChat() {
     shouldStickToBottomRef.current = true;
     addChatMessage(activeChannel, text.trim(), adminName, role, {
       priority: urgent ? 'urgent' : 'normal',
+      senderId: adminSenderId,
     });
     setInputText('');
     setMarkUrgent(false);
 
-    const fallbackAuthor = buildFallbackTeamReplyAuthor(activeChannel, text);
+    const fallbackAuthor = buildFallbackTeamReplyAuthor(activeChannel, text, employees);
     let replyAuthor = fallbackAuthor.name;
     let replyRole = fallbackAuthor.role;
     let replyMsg = buildFallbackTeamReply(activeChannel, text);
@@ -222,7 +264,9 @@ export function TeamChat() {
       await new Promise((r) => setTimeout(r, 900));
     }
 
-    addChatMessage(activeChannel, replyMsg, replyAuthor, replyRole);
+    addChatMessage(activeChannel, replyMsg, replyAuthor, replyRole, {
+      senderId: dmEmployee?.id ?? undefined,
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -255,12 +299,37 @@ export function TeamChat() {
       <div className="flex flex-1 min-h-0 max-h-full border border-zinc-805 bg-zinc-900 rounded-3xl overflow-hidden shadow-lg">
         {/* Channels */}
         <div className="w-full max-w-[300px] border-r border-zinc-805 bg-zinc-950/50 p-4 flex flex-col gap-3 shrink-0 hidden md:flex">
+          <div className="flex gap-1 p-1 bg-zinc-900 rounded-xl border border-zinc-850">
+            <button
+              type="button"
+              onClick={() => setSidebarView('channels')}
+              className={cn(
+                'flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg cursor-pointer',
+                sidebarView === 'channels' ? 'bg-zinc-800 text-white' : 'text-zinc-500'
+              )}
+            >
+              Channels
+            </button>
+            <button
+              type="button"
+              onClick={() => setSidebarView('directory')}
+              className={cn(
+                'flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg cursor-pointer',
+                sidebarView === 'directory' ? 'bg-zinc-800 text-white' : 'text-zinc-500'
+              )}
+            >
+              Directory
+            </button>
+          </div>
+
+          {sidebarView === 'channels' ? (
+            <>
           <div className="flex items-center justify-between">
             <span className="text-[9px] font-black text-zinc-550 uppercase tracking-widest">Channels</span>
             <Bell className="w-3.5 h-3.5 text-zinc-600" />
           </div>
 
-          <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+          <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5 min-h-0">
             {CHANNELS.map((chan) => {
               const isActive = chan.id === activeChannel;
               const Icon = chan.icon;
@@ -298,27 +367,128 @@ export function TeamChat() {
                 </button>
               );
             })}
+
+            <div className="pt-3 border-t border-zinc-850 mt-2">
+              <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-widest block mb-2">
+                Direct messages
+              </span>
+              {activeStaff.map((emp) => {
+                const dmId = dmChannelId(emp.id);
+                const isActive = activeChannel === dmId;
+                const unread = chatMessages.filter((m) => m.channel === dmId && m.senderId !== adminSenderId).length;
+                return (
+                  <button
+                    key={emp.id}
+                    type="button"
+                    onClick={() => setActiveChannel(dmId)}
+                    className={cn(
+                      'w-full flex items-center gap-2 p-2.5 rounded-xl text-left cursor-pointer mb-1',
+                      isActive ? 'bg-zinc-850 border border-zinc-750' : 'hover:bg-zinc-900/70'
+                    )}
+                  >
+                    <img src={emp.avatarUrl ?? avatarUrl(emp.name)} alt="" className="w-7 h-7 rounded-lg object-cover shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <span className={cn('text-[11px] font-bold block truncate', isActive ? 'text-brand-400' : 'text-zinc-300')}>
+                        {emp.name}
+                      </span>
+                      <span className="text-[9px] text-zinc-600 truncate block">{emp.role}</span>
+                    </div>
+                    {unread > 0 && !isActive && (
+                      <span className="text-[8px] font-black bg-brand-500 text-white px-1.5 py-0.5 rounded-full">{unread}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="border-t border-zinc-850 pt-3 space-y-2">
+          <div className="border-t border-zinc-850 pt-3 space-y-2 shrink-0">
             <span className="text-[8px] font-extrabold text-zinc-550 uppercase tracking-widest block">
               On duty now
             </span>
-            {ONLINE_STAFF.map((s) => (
-              <div key={s.name} className="flex items-center gap-2 text-[10px]">
+            {activeStaff.map((s) => (
+              <div key={s.id} className="flex items-center gap-2 text-[10px]">
                 <span
                   className={cn(
                     'w-1.5 h-1.5 rounded-full shrink-0',
-                    s.status === 'online' && 'bg-emerald-400',
-                    s.status === 'busy' && 'bg-amber-400',
-                    s.status === 'away' && 'bg-zinc-600'
+                    s.presence === 'online' && 'bg-emerald-400',
+                    s.presence === 'busy' && 'bg-amber-400',
+                    s.presence === 'away' && 'bg-zinc-600',
+                    (!s.presence || s.presence === 'offline') && 'bg-zinc-700'
                   )}
                 />
                 <span className="font-bold text-zinc-300 truncate">{s.name}</span>
-                <span className="text-zinc-600 truncate ml-auto">{s.status}</span>
+                <span className="text-zinc-600 truncate ml-auto">{s.presence ?? 'offline'}</span>
               </div>
             ))}
           </div>
+            </>
+          ) : (
+            <div className="flex-1 overflow-y-auto space-y-2 min-h-0 pr-0.5">
+              <span className="text-[9px] font-black text-zinc-550 uppercase tracking-widest flex items-center gap-1.5">
+                <BookUser className="w-3.5 h-3.5" /> Staff
+              </span>
+              {employees.map((emp) => {
+                const branch = branches.find((b) => b.id === emp.branchId);
+                return (
+                  <div key={emp.id} className="space-y-2">
+                    <PersonProfilePanel
+                      compact
+                      profile={{
+                        name: emp.name,
+                        subtitle: emp.email,
+                        role: emp.role,
+                        department: emp.department,
+                        phone: emp.phone,
+                        location: branch?.name,
+                        startDate: emp.startDate,
+                        bio: emp.bio,
+                        skills: emp.skills,
+                        presence: emp.presence,
+                        avatarUrl: emp.avatarUrl,
+                      }}
+                      onEdit={() => {
+                        setActiveChannel(dmChannelId(emp.id));
+                        setSidebarView('channels');
+                      }}
+                      editLabel="Message"
+                    />
+                  </div>
+                );
+              })}
+              <span className="text-[9px] font-black text-zinc-550 uppercase tracking-widest flex items-center gap-1.5 pt-2">
+                Leads & members
+              </span>
+              {leads.map((lead) => (
+                <PersonProfilePanel
+                  key={lead.id}
+                  compact
+                  profile={{
+                    name: lead.name,
+                    subtitle: lead.company,
+                    email: lead.email,
+                    phone: lead.phone,
+                    bio: lead.bio,
+                    badges: [lead.stage],
+                  }}
+                />
+              ))}
+              {onboardings.map((onb) => (
+                <PersonProfilePanel
+                  key={onb.id}
+                  compact
+                  profile={{
+                    name: onb.clientName,
+                    subtitle: onb.companyName,
+                    email: onb.email,
+                    phone: onb.phone,
+                    bio: onb.bio,
+                    badges: onb.welcomeEmailSent ? ['Welcome email sent'] : ['Onboarding active'],
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Main thread */}
@@ -326,7 +496,11 @@ export function TeamChat() {
           <div className="p-4 border-b border-zinc-805 bg-zinc-900/80 flex items-center justify-between gap-3">
             <div className="min-w-0">
               <span className="text-sm font-bold text-white flex items-center gap-1.5">
-                <Hash className="w-4 h-4 text-zinc-600 shrink-0" />
+                {isDmChannel(activeChannel) ? (
+                  <UserCircle className="w-4 h-4 text-brand-400 shrink-0" />
+                ) : (
+                  <Hash className="w-4 h-4 text-zinc-600 shrink-0" />
+                )}
                 {activeChannelMeta.label}
               </span>
               <p className="text-[10px] text-zinc-500 font-medium mt-0.5 truncate">
@@ -475,7 +649,7 @@ export function TeamChat() {
               </button>
               <input
                 type="text"
-                placeholder={`Message #${activeChannelMeta.label}…`}
+                placeholder={isDmChannel(activeChannel) ? `Message ${dmEmployee?.name ?? 'staff'}…` : `Message #${activeChannelMeta.label}…`}
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 disabled={aiReplying}

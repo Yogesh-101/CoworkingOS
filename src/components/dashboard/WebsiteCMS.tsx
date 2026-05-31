@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { LayoutGrid, Eye, Paintbrush, Sliders, DollarSign, Sparkles, Server, Laptop, ChevronRight } from 'lucide-react';
 import { BrandLogo } from '@/components/ui/BrandLogo';
 import { cn } from '@/lib/utils';
+import { formatINR } from '@/lib/currency';
 
 export function WebsiteCMS() {
   const { cmsSettings, updateCMSSettings } = useStore();
@@ -144,7 +145,7 @@ export function WebsiteCMS() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide block">Hot-Desk ($/mo)</label>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide block">Hot-Desk (₹/mo)</label>
                   <input 
                     type="number"
                     value={cmsSettings.hotDeskPrice}
@@ -153,7 +154,7 @@ export function WebsiteCMS() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide block">Dedicated ($/mo)</label>
+                  <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-wide block">Dedicated (₹/mo)</label>
                   <input 
                     type="number"
                     value={cmsSettings.dedicatedPrice}
@@ -264,7 +265,7 @@ export function WebsiteCMS() {
                       </div>
 
                       <div className="pt-3 border-t border-zinc-900 leading-none flex items-baseline gap-1">
-                        <span className="text-sm font-black text-white font-mono">${pkg.price}</span>
+                        <span className="text-sm font-black text-white font-mono">{formatINR(pkg.price)}</span>
                         <span className="text-[9px] text-zinc-500 font-semibold uppercase">/ month</span>
                       </div>
                     </div>

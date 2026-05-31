@@ -113,7 +113,7 @@ export function runMutation(db: Database.Database, req: MutationRequest): Bootst
         ).run(id, p.leadName, p.company, p.deskType, p.monthlyFee, p.durationMonths, 'sent', nowDate());
         insertNotification(db, {
           title: 'Proposal Contract Sent',
-          description: `Quotation sent to ${p.leadName} (${p.company}) for a ${p.deskType} contract valued at $${p.monthlyFee}/month.`,
+          description: `Quotation sent to ${p.leadName} (${p.company}) for a ${p.deskType} contract valued at ₹${p.monthlyFee.toLocaleString('en-IN')}/month.`,
           type: 'lead',
         });
         break;
@@ -311,7 +311,7 @@ export function runMutation(db: Database.Database, req: MutationRequest): Bootst
           );
           insertNotification(db, {
             title: 'Workspace Lease Renewed',
-            description: `Successfully extended lease for ${ren.client_name} (${ren.company_name}) for $${ren.monthly_fee}/mo.`,
+            description: `Successfully extended lease for ${ren.client_name} (${ren.company_name}) for ₹${ren.monthly_fee.toLocaleString('en-IN')}/mo.`,
             type: 'billing',
           });
         }
@@ -368,7 +368,7 @@ export function runMutation(db: Database.Database, req: MutationRequest): Bootst
         );
         insertNotification(db, {
           title: 'Invoice Issued',
-          description: `Invoice ${id} generated for ${inv.clientName} ($${inv.amount}).`,
+          description: `Invoice ${id} generated for ${inv.clientName} (₹${inv.amount.toLocaleString('en-IN')}).`,
           type: 'billing',
         });
         break;
@@ -414,7 +414,7 @@ export function runMutation(db: Database.Database, req: MutationRequest): Bootst
             `onb-${Date.now()}`,
             assigneeName,
             assigneeName,
-            `${assigneeName.toLowerCase().replace(/\s+/g, '')}@apex-member.co`,
+            `${assigneeName.toLowerCase().replace(/\s+/g, '')}@member.co.in`,
             branchId,
             deskId,
             JSON.stringify(steps)

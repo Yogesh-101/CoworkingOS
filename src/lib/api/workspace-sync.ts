@@ -32,6 +32,7 @@ export function mapBootstrapToState(data: BootstrapPayload): Partial<AppState> {
     integrations: data.integrations,
     renewals: data.renewals,
     userSettings: data.userSettings,
+    emailLogs: data.emailLogs ?? [],
   };
 }
 
@@ -54,6 +55,7 @@ export function extractWorkspacePayload(state: AppState): BootstrapPayload {
     integrations: state.integrations,
     renewals: state.renewals,
     userSettings: state.userSettings,
+    emailLogs: state.emailLogs,
   };
 }
 

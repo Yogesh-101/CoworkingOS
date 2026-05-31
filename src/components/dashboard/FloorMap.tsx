@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '@/store';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '@/lib/utils';
+import { formatINR } from '@/lib/currency';
 import { Monitor, Users, Settings, CircleDot, Info, Trash2, ShieldAlert } from 'lucide-react';
 import { Desk } from '@/types';
 
@@ -204,7 +205,7 @@ export function FloorMap() {
                 <div className="p-6 flex-1 flex flex-col justify-between overflow-y-auto space-y-6">
                   <div>
                     <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest block mb-1">Standard Rental Cost</span>
-                    <p className="text-4xl font-display font-bold text-zinc-100">${selectedDesk.pricePerMonth}<span className="text-xs text-zinc-550 font-normal">/month</span></p>
+                    <p className="text-4xl font-display font-bold text-zinc-100">{formatINR(selectedDesk.pricePerMonth)}<span className="text-xs text-zinc-550 font-normal">/month</span></p>
                   </div>
 
                   {/* Operational Controls based on space status */}
@@ -218,7 +219,7 @@ export function FloorMap() {
                           <input 
                             type="text" 
                             required
-                            placeholder="e.g. Stark Industries Inc."
+                            placeholder="e.g. Infospectrum Labs Pvt Ltd"
                             value={occupantName}
                             onChange={(e) => {
                               setOccupantName(e.target.value);

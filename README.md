@@ -123,7 +123,7 @@ Serve the contents of `dist/` with any static host, for example:
 - KPI cards: total revenue, occupancy rate, active members, churn  
 - Revenue chart (Recharts) with time-range control  
 - Recent activity feed tied to the notification system  
-- Metrics scoped to the **active branch** (Downtown Hub HQ, Westside Oasis, Tech Park Center, etc.)
+- Metrics scoped to the **active branch** (HITEC City Hub, Gachibowli Workspace, Jubilee Hills Center, etc.)
 
 ### Interactive floor map
 

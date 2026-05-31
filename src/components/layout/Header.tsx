@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bell, Search, MapPin, Check, Sparkles, Trash2, HelpCircle, Wifi, DollarSign, UserCheck, ChevronDown, X, Briefcase, Receipt } from 'lucide-react';
 import { useStore } from '@/store';
 import { motion, AnimatePresence } from 'motion/react';
+import { formatINR } from '@/lib/currency';
 
 interface Notification {
   id: string;
@@ -74,7 +75,7 @@ export function Header() {
 
   const handleSimulateNotification = () => {
     const templates = [
-      { title: 'High Occupancy Alert', description: 'Downtown Hub HQ has reached 88% capacity today.', type: 'system' as const },
+      { title: 'High Occupancy Alert', description: 'HITEC City Hub has reached 88% capacity today.', type: 'system' as const },
       { title: 'New Space Booking', description: 'Regina Phalange reserved Desk D-12 for 1 month.', type: 'lead' as const },
       { title: 'Invoice Overdue Notification', description: 'Invoice INV-2043 daily reminder triggered.', type: 'billing' as const },
       { title: 'Site Tour Booked', description: 'A virtual tour was requested by Tech Investors Corp.', type: 'tour' as const },
@@ -252,7 +253,7 @@ export function Header() {
                                 </div>
                               </div>
                               <span className="text-xs font-mono font-bold text-white whitespace-nowrap">
-                                ${inv.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                {formatINR(inv.amount, { decimals: true })}
                               </span>
                             </button>
                           ))}

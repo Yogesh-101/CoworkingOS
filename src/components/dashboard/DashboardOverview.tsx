@@ -5,6 +5,7 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import { ArrowUpRight, ArrowDownRight, Users, Building, Activity, DollarSign, ChevronDown, Calendar, Check, Brain, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { computeBIInsights, computeOccupancyForecast } from '@/lib/intelligence';
+import { formatINR, WORKSPACE_PRICING } from '@/lib/currency';
 
 function KPICard({ title, value, change, isPositive, icon: Icon, delay }: any) {
   return (
@@ -61,15 +62,15 @@ export function DashboardOverview() {
 
   // Compute dynamic curve data in real-time based on activeBranchId and selected timeRange
   const getDynamicChartData = () => {
-    const isBrooklynHQ = activeBranchId === 'b1';
-    const isAustinOasis = activeBranchId === 'b2';
-    const multiplier = isBrooklynHQ ? 1.25 : isAustinOasis ? 0.95 : 1.45;
+    const isHitecCity = activeBranchId === 'b1';
+    const isGachibowli = activeBranchId === 'b2';
+    const multiplier = isHitecCity ? 1.25 : isGachibowli ? 0.95 : 1.45;
     
     if (timeRange === 'Last 7 days') {
       return Array.from({ length: 7 }).map((_, i) => {
         const date = subDays(new Date(), 6 - i);
         // consistent deterministic mathematical sine curve with small variation
-        const baseVal = Math.sin(i * 1.6 + (isBrooklynHQ ? 0.8 : 2.1)) * 1400 + 17800;
+        const baseVal = Math.sin(i * 1.6 + (isHitecCity ? 0.8 : 2.1)) * 1400 + 17800;
         return {
           name: format(date, 'EEE'),
           revenue: Math.round(baseVal * multiplier),
@@ -80,7 +81,7 @@ export function DashboardOverview() {
       // Last 30 days
       return Array.from({ length: 30 }).map((_, i) => {
         const date = subDays(new Date(), 29 - i);
-        const baseVal = Math.sin(i * 0.45 + (isBrooklynHQ ? 0.5 : 1.5)) * 1900 + 17100 + (i * 165); // growth line
+        const baseVal = Math.sin(i * 0.45 + (isHitecCity ? 0.5 : 1.5)) * 1900 + 17100 + (i * 165); // growth line
         return {
           name: format(date, 'MMM dd'),
           revenue: Math.round(baseVal * multiplier),
@@ -102,7 +103,7 @@ export function DashboardOverview() {
     else if (activeBranchId === 'b3') base = 195000;
 
     const occupiedDesksCount = activeBranch?.desks.filter(d => d.status === 'occupied').length || 0;
-    const deskRevenueContribution = occupiedDesksCount * 399;
+    const deskRevenueContribution = occupiedDesksCount * WORKSPACE_PRICING.hotDesk;
 
     const paidInvoicesSum = invoices
       .filter(inv => inv.status === 'paid')
@@ -187,7 +188,7 @@ export function DashboardOverview() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <KPICard 
           title="Total Revenue" 
-          value={`$${(dynamicRevenue / 1000).toFixed(1)}k`} 
+          value={formatINR(dynamicRevenue, { compact: true })} 
           change={dynamicRevenueGrowth} 
           isPositive={dynamicRevenueGrowth > 0} 
           icon={DollarSign}
@@ -340,7 +341,7 @@ export function DashboardOverview() {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="name" stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} dy={10} />
-                <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => `$${value/1000}k`} />
+                <YAxis stroke="#52525b" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number) => formatINR(value, { compact: true })} />
                 <Tooltip 
                   contentStyle={{ backgroundColor: '#18181b', border: '1px solid #27272a', borderRadius: '12px', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.5)' }}
                   itemStyle={{ color: '#f4f4f5', fontWeight: 600 }}

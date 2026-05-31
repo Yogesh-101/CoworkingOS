@@ -7,6 +7,7 @@ import { LampContainer } from '@/components/ui/lamp';
 import ColorBends from '@/components/ColorBends';
 import { Radar, IconContainer } from '@/components/ui/radar-effect';
 import { BrandLogo } from '@/components/ui/BrandLogo';
+import { formatINR } from '@/lib/currency';
 
 export function LandingPage() {
   const requestPlatformAccess = useStore((state) => state.requestPlatformAccess);
@@ -357,7 +358,7 @@ export function LandingPage() {
                 id: 'launch',
                 name: 'Launch',
                 description: 'Perfect for single-location spaces starting their digital journey.',
-                price: { monthly: 149, annually: 119 },
+                price: { monthly: 12499, annually: 9999 },
                 features: [
                   '1 Coworking Location',
                   'Up to 100 Members Managed',
@@ -374,7 +375,7 @@ export function LandingPage() {
                 id: 'growth',
                 name: 'Growth',
                 description: 'All-in-one operations platform for fast-growing spaces.',
-                price: { monthly: 299, annually: 239 },
+                price: { monthly: 24999, annually: 19999 },
                 features: [
                   'Up to 3 Managed Locations',
                   'Up to 500 Active Members',
@@ -391,7 +392,7 @@ export function LandingPage() {
                 id: 'scale',
                 name: 'Scale',
                 description: 'Enterprise grade power & customized whitelabel portals.',
-                price: { monthly: 599, annually: 479 },
+                price: { monthly: 49999, annually: 39999 },
                 features: [
                   'Unlimited Active Locations',
                   'Unlimited Active Shared Members',
@@ -439,13 +440,13 @@ export function LandingPage() {
                   {/* Price display */}
                   <div className="mb-8 border-b border-zinc-900 pb-6 flex flex-col justify-end">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-4xl sm:text-5xl font-display font-black text-white">${currentPrice}</span>
+                      <span className="text-4xl sm:text-5xl font-display font-black text-white">{formatINR(currentPrice)}</span>
                       <span className="text-zinc-500 font-bold text-sm">/ mo</span>
                     </div>
                     <div className="h-4 mt-2">
                       {billingPeriod === 'annually' ? (
                         <p className="text-[10px] text-zinc-500 font-bold tracking-wide uppercase">
-                          ${yearlyTotal.toLocaleString()} Billed yearly (Includes 20% savings)
+                          {formatINR(yearlyTotal)} billed yearly (includes 20% savings)
                         </p>
                       ) : (
                         <p className="text-[10px] text-zinc-500 font-bold tracking-wide uppercase text-zinc-500/80">

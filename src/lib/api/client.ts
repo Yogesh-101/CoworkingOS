@@ -15,6 +15,7 @@ import type {
   WorkspaceRenewal,
   UserSettings,
   SupportMessage,
+  EmailLog,
 } from '@/types';
 import type { Notification } from '@/store';
 
@@ -36,6 +37,7 @@ export interface BootstrapPayload {
   integrations: IntegrationSetting[];
   renewals: WorkspaceRenewal[];
   userSettings: UserSettings;
+  emailLogs?: EmailLog[];
 }
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api';

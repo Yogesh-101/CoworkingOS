@@ -31,6 +31,7 @@ import {
   computeAttendanceInsights,
   computeBIInsights,
 } from '@/lib/intelligence';
+import { formatINR } from '@/lib/currency';
 
 const SUB_TABS = [
   { id: 'overview', label: 'BI Dashboard', icon: Brain },
@@ -296,7 +297,7 @@ export function IntelligenceHub() {
                     </div>
                     <div className="min-w-0">
                       <p className="font-bold text-zinc-100 truncate">{lead.name}</p>
-                      <p className="text-xs text-zinc-500">{lead.company} · ${lead.value.toLocaleString()}</p>
+                      <p className="text-xs text-zinc-500">{lead.company} · {formatINR(lead.value)}</p>
                       <p className="text-[10px] text-zinc-600 mt-1">{score.factors.join(' · ')}</p>
                     </div>
                   </div>
